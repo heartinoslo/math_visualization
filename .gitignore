@@ -1,0 +1,44 @@
+﻿# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python tools and tests
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# PyCharm / IDE
+.idea/
+.vscode/
+
+# Qt / QML generated files
+*.qmlc
+*.jsc
+*.qsb
+qmlcache/
+.qmlcache/
+
+# Runtime files
+*.log
+logs/
+temp/
+tmp/
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini

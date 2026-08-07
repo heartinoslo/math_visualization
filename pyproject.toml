@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "math-visualization"
+version = "0.1.0"
+description = "An interactive linear algebra visualization desktop application."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6",
+    "numpy",
+    "scipy",
+
+]
+
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-ra"

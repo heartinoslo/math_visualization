@@ -28,4 +28,8 @@ Create and activate a project-local virtual environment, then install dependenci
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+```
 
+## License
+This project is licensed under the GNU General Public License v3.0.
+See the [LICENSE](LICENSE) file for details.

@@ -8,10 +8,18 @@ def test_application_viewmodel() -> None:
     view_model = ApplicationViewModel(document)
 
     assert view_model.statusMessage == "Ready"
-def test_ping_updates_status_message() -> None:
+    assert view_model.document is document
+
+
+def test_ping_updates_status_message_and_emits_signal() -> None:
     document = SceneDocument()
     view_model = ApplicationViewModel(document)
+    notifications: list[str] = []
+    view_model.statusMessageChanged.connect(
+        lambda: notifications.append(view_model.statusMessage)
+    )
 
     view_model.ping()
 
     assert view_model.statusMessage == "Python connection OK"
+    assert notifications == ["Python connection OK"]

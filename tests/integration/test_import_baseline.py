@@ -1,8 +1,14 @@
-"""Integration tests for the initial package baseline."""
+"""Integration tests for the Stage 0 package baseline."""
+
+import runpy
+from pathlib import Path
 
 import math_visualization
 from math_visualization.application import main
 from math_visualization.infrastructure.paths import MAIN_QML_PATH
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_package_exposes_version() -> None:
@@ -19,6 +25,13 @@ def test_package_exposes_version() -> None:
 def test_application_main_is_callable() -> None:
     """The application entry point should be callable."""
     assert callable(main)
+
+
+def test_root_main_delegates_to_application_main() -> None:
+    """The compatibility script must not own a second bootstrap implementation."""
+    namespace = runpy.run_path(PROJECT_ROOT / "main.py")
+
+    assert namespace["main"] is main
 
 
 def test_main_qml_file_exists() -> None:

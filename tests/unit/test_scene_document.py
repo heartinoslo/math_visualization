@@ -6,6 +6,13 @@ def test_default_title() -> None:
 
     assert doc.title == "Untitled"
 
+
+def test_default_schema_version() -> None:
+    document = SceneDocument()
+
+    assert document.schema_version == 1
+
+
 def test_document_ids_are_unique() -> None:
     first = SceneDocument()
     second = SceneDocument()

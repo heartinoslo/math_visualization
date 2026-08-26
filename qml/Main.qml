@@ -13,11 +13,36 @@ ApplicationWindow {
         anchors.fill: parent
         color: "#202124"
 
-        Label {
+        Column {
             anchors.centerIn: parent
-            text: "Math Visualization"
-            color: "#F1F3F4"
-            font.pixelSize: 28
+            spacing: 16
+
+            Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Math Visualization"
+                color: "#F1F3F4"
+                font.pixelSize: 28
+            }
+
+            Label {
+                id: statusLabel
+                objectName: "statusLabel"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Status: " + app.statusMessage
+                color: "#F1F3F4"
+                font.pixelSize: 18
+            }
+
+            Button {
+                objectName: "testPythonConnectionButton"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Test Python Connection"
+                onClicked: app.ping()
+            }
         }
+    }
+
+    function testPythonConnection() {
+        app.ping()
     }
 }

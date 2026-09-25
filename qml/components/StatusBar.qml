@@ -28,6 +28,23 @@ Rectangle {
             elide: Text.ElideRight
         }
 
+        // 2D viewport readout: camera state and the pointer's mathematical position.
+        Label {
+            objectName: "camera2DSummary"
+            visible: app.workspace.workspaceMode === "2d"
+            text: app.viewport2D.cameraSummary
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+        }
+
+        Label {
+            objectName: "cursorCoordinates"
+            visible: app.workspace.workspaceMode === "2d" && text !== ""
+            text: app.viewport2D.cursorText
+            color: AppTheme.Theme.primaryText
+            font.pixelSize: 12
+        }
+
         Button {
             objectName: "testPythonConnectionButton"
             text: "Test Python Connection"

@@ -61,7 +61,7 @@ def test_workspace_cameras_and_progress_survive_switching() -> None:
 
     assert "azimuth 120.0" in summary_3d
     assert "distance 8.00" in summary_3d
-    assert summary_2d == "Camera: center (1.00, -2.00), zoom 1.50"
+    assert summary_2d == "Center (1.00, -2.00) · Zoom 1.50×"
     assert view_model.animation.progress == 0.4
     assert root.findChild(QObject, "animationProgressLabel").property("text") == "40%"
     assert root.findChild(QObject, "animationProgressSlider").property("value") == 0.4

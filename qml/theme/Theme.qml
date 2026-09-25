@@ -17,6 +17,17 @@ QtObject {
     readonly property color errorBackground: darkMode ? "#4A2226" : "#FDE7E9"
     readonly property color errorBorder: darkMode ? "#8C3A42" : "#E3A1A8"
     readonly property color errorText: darkMode ? "#FFD7DB" : "#8A1C27"
+    readonly property color gridMinor: darkMode ? "#1B212A" : "#E9EDF2"
+    readonly property color gridMajor: darkMode ? "#2A323E" : "#D2D9E2"
+    readonly property color axisColor: darkMode ? "#7D8898" : "#6E7988"
+    readonly property color grid3DMinor: darkMode ? "#262D38" : "#DCE2EA"
+    readonly property color grid3DMajor: darkMode ? "#3A4453" : "#B9C3D0"
+    readonly property color axisXColor: darkMode ? "#F2555A" : "#D93036"
+    readonly property color axisYColor: darkMode ? "#4CC38A" : "#218358"
+    readonly property color axisZColor: darkMode ? "#6E9BFF" : "#2F5FD0"
+    readonly property real activePlaneOpacity: 0.07
+    readonly property real auxiliaryPlaneOpacity: 0.45
+    readonly property color overlayBackground: darkMode ? "#D922262D" : "#E6FFFFFF"
 
     readonly property int spacingSmall: 6
     readonly property int spacingMedium: 12
@@ -39,6 +50,9 @@ QtObject {
     readonly property int expressionDockHeight: 190
     readonly property int expressionDockCollapsedHeight: 34
     readonly property int errorBannerHeight: 36
+    readonly property int axisLabelMargin: 4
+    readonly property int axisLabelPixelSize: 11
+    readonly property int originPointRadius: 3
     readonly property int leftPanelWidth: 235
     readonly property int leftPanelMinimumWidth: 180
     readonly property int centerAreaMinimumWidth: 540

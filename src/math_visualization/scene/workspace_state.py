@@ -49,8 +49,8 @@ class CameraState3D:
     target_x: float = 0.0
     target_y: float = 0.0
     target_z: float = 0.0
-    azimuth: float = 45.0
-    elevation: float = 30.0
+    azimuth: float = -60.0
+    elevation: float = 25.0
     distance: float = 12.0
     projection_mode: ProjectionMode = ProjectionMode.PERSPECTIVE
 

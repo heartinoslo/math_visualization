@@ -1,48 +1,36 @@
 import QtQuick
 import QtQuick.Controls
+import "pages"
+import "theme" as AppTheme
 
 ApplicationWindow {
     id: root
+    objectName: "applicationWindow"
 
-    width: 960
-    height: 640
+    width: 1440
+    height: 900
+    minimumWidth: AppTheme.Theme.minimumWindowWidth
+    minimumHeight: AppTheme.Theme.minimumWindowHeight
     visible: true
     title: "Math Visualization"
+    color: AppTheme.Theme.windowBackground
 
-    Rectangle {
+    WorkspacePage {
+        id: workspacePage
         anchors.fill: parent
-        color: "#202124"
-
-        Column {
-            anchors.centerIn: parent
-            spacing: 16
-
-            Label {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Math Visualization"
-                color: "#F1F3F4"
-                font.pixelSize: 28
-            }
-
-            Label {
-                id: statusLabel
-                objectName: "statusLabel"
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Status: " + app.statusMessage
-                color: "#F1F3F4"
-                font.pixelSize: 18
-            }
-
-            Button {
-                objectName: "testPythonConnectionButton"
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "Test Python Connection"
-                onClicked: app.ping()
-            }
-        }
     }
 
+    // These test hooks retain the Stage 0 bridge coverage without putting
+    // application state into QML. The workspace selection is presentation-only.
     function testPythonConnection() {
-        app.ping()
+        workspacePage.testPythonConnection()
+    }
+
+    function toggleExpressionDock() {
+        workspacePage.toggleExpressionDock()
+    }
+
+    function setPresentationWorkspace(index) {
+        workspacePage.setPresentationWorkspace(index)
     }
 }

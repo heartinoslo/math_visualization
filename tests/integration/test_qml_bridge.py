@@ -12,13 +12,18 @@ from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.application_viewmodel import ApplicationViewModel
 
 
-def test_qml_reads_property_calls_slot_and_receives_signal() -> None:
+def load_qml_root():
+    """Load the application shell with a live Stage 0 view model."""
     application = create_gui_application(["pytest"])
     view_model = ApplicationViewModel(SceneDocument())
     engine = QQmlApplicationEngine()
 
     assert load_main_qml(engine, view_model)
-    root = engine.rootObjects()[0]
+    return application, view_model, engine, engine.rootObjects()[0]
+
+
+def test_qml_reads_property_calls_slot_and_receives_signal() -> None:
+    application, view_model, engine, root = load_qml_root()
     status_label = root.findChild(QObject, "statusLabel")
     assert status_label is not None
     assert status_label.property("text") == "Status: Ready"
@@ -28,6 +33,42 @@ def test_qml_reads_property_calls_slot_and_receives_signal() -> None:
 
     assert view_model.statusMessage == "Python connection OK"
     assert status_label.property("text") == "Status: Python connection OK"
+
+
+def test_qml_shell_contains_structural_regions_and_toggleable_dock() -> None:
+    application, _, engine, root = load_qml_root()
+    expected_regions = (
+        "mainArea",
+        "leftPanel",
+        "centerArea",
+        "visualizationArea",
+        "rightPanel",
+        "expressionDock",
+        "animationBar",
+        "statusBar",
+        "workspace2D",
+    )
+
+    for object_name in expected_regions:
+        assert root.findChild(QObject, object_name) is not None
+
+    assert root.findChild(QObject, "topBar") is None
+
+    expression_dock = root.findChild(QObject, "expressionDock")
+    assert expression_dock.property("expanded") is True
+    assert QMetaObject.invokeMethod(root, "toggleExpressionDock")
+    application.processEvents()
+    assert expression_dock.property("expanded") is False
+
+    assert QMetaObject.invokeMethod(root, "toggleExpressionDock")
+    application.processEvents()
+    assert expression_dock.property("expanded") is True
+
+    workspace_3d_tab = root.findChild(QObject, "workspace3DTab")
+    assert workspace_3d_tab is not None
+    assert QMetaObject.invokeMethod(workspace_3d_tab, "click")
+    application.processEvents()
+    assert root.findChild(QObject, "workspace3D") is not None
 
 
 def test_missing_qml_entry_returns_failure(tmp_path) -> None:

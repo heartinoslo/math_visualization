@@ -3,14 +3,20 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-    readonly property color windowBackground: "#181B20"
-    readonly property color panelBackground: "#22262D"
-    readonly property color workspaceBackground: "#12161C"
-    readonly property color surfaceLevelTwo: "#343A43"
-    readonly property color borderColor: "#3B424D"
-    readonly property color primaryText: "#F1F3F5"
-    readonly property color secondaryText: "#AEB7C2"
-    readonly property color accentColor: "#5B8CFF"
+    // Driven from app.themeMode by Main.qml; the theme itself owns no state.
+    property bool darkMode: true
+
+    readonly property color windowBackground: darkMode ? "#181B20" : "#EEF1F5"
+    readonly property color panelBackground: darkMode ? "#22262D" : "#FFFFFF"
+    readonly property color workspaceBackground: darkMode ? "#12161C" : "#F8F9FB"
+    readonly property color surfaceLevelTwo: darkMode ? "#343A43" : "#DDE2E9"
+    readonly property color borderColor: darkMode ? "#3B424D" : "#C9D0DA"
+    readonly property color primaryText: darkMode ? "#F1F3F5" : "#1B1F24"
+    readonly property color secondaryText: darkMode ? "#AEB7C2" : "#586271"
+    readonly property color accentColor: darkMode ? "#5B8CFF" : "#2F66E0"
+    readonly property color errorBackground: darkMode ? "#4A2226" : "#FDE7E9"
+    readonly property color errorBorder: darkMode ? "#8C3A42" : "#E3A1A8"
+    readonly property color errorText: darkMode ? "#FFD7DB" : "#8A1C27"
 
     readonly property int spacingSmall: 6
     readonly property int spacingMedium: 12
@@ -32,6 +38,7 @@ QtObject {
     readonly property int expressionDockHeaderHeight: 34
     readonly property int expressionDockHeight: 190
     readonly property int expressionDockCollapsedHeight: 34
+    readonly property int errorBannerHeight: 36
     readonly property int leftPanelWidth: 235
     readonly property int leftPanelMinimumWidth: 180
     readonly property int centerAreaMinimumWidth: 540

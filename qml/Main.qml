@@ -15,22 +15,33 @@ ApplicationWindow {
     title: "Math Visualization"
     color: AppTheme.Theme.windowBackground
 
+    // Keep stock Qt Quick Controls legible in both themes.
+    palette.window: AppTheme.Theme.windowBackground
+    palette.windowText: AppTheme.Theme.primaryText
+    palette.base: AppTheme.Theme.panelBackground
+    palette.text: AppTheme.Theme.primaryText
+    palette.button: AppTheme.Theme.surfaceLevelTwo
+    palette.buttonText: AppTheme.Theme.primaryText
+    palette.highlight: AppTheme.Theme.accentColor
+
+    Binding {
+        target: AppTheme.Theme
+        property: "darkMode"
+        value: app.themeMode === "dark"
+    }
+
     WorkspacePage {
         id: workspacePage
         anchors.fill: parent
     }
 
-    // These test hooks retain the Stage 0 bridge coverage without putting
-    // application state into QML. The workspace selection is presentation-only.
+    // Test hooks for presentation-only behaviour; application state such as the
+    // workspace mode lives in the Python view models and is driven through `app`.
     function testPythonConnection() {
         workspacePage.testPythonConnection()
     }
 
     function toggleExpressionDock() {
         workspacePage.toggleExpressionDock()
-    }
-
-    function setPresentationWorkspace(index) {
-        workspacePage.setPresentationWorkspace(index)
     }
 }

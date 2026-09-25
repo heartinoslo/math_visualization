@@ -25,5 +25,16 @@ Rectangle {
             color: AppTheme.Theme.secondaryText
             font.pixelSize: 13
         }
+
+        Label {
+            objectName: "camera3DSummary"
+            Layout.alignment: Qt.AlignHCenter
+            text: "Camera: azimuth " + app.workspace.camera3D.azimuth.toFixed(1)
+                + "°, elevation " + app.workspace.camera3D.elevation.toFixed(1)
+                + "°, distance " + app.workspace.camera3D.distance.toFixed(2)
+                + ", " + app.workspace.camera3D.projectionMode
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+        }
     }
 }

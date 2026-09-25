@@ -25,5 +25,15 @@ Rectangle {
             color: AppTheme.Theme.secondaryText
             font.pixelSize: 13
         }
+
+        Label {
+            objectName: "camera2DSummary"
+            Layout.alignment: Qt.AlignHCenter
+            text: "Camera: center (" + app.workspace.camera2D.centerX.toFixed(2) + ", "
+                + app.workspace.camera2D.centerY.toFixed(2) + "), zoom "
+                + app.workspace.camera2D.zoom.toFixed(2)
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+        }
     }
 }

@@ -16,10 +16,6 @@ Item {
         expressionDock.expanded = !expressionDock.expanded
     }
 
-    function setPresentationWorkspace(index) {
-        visualizationArea.presentationWorkspaceIndex = index
-    }
-
     Rectangle {
         anchors.fill: parent
         color: AppTheme.Theme.windowBackground
@@ -54,10 +50,18 @@ Item {
                     anchors.fill: parent
                     spacing: AppTheme.Theme.spacingMedium
 
+                    ErrorBanner {
+                        objectName: "errorBanner"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: AppTheme.Theme.errorBannerHeight
+                        visible: message !== ""
+                        message: app.errorMessage
+                        onDismissed: app.clearError()
+                    }
+
                     Rectangle {
                         id: visualizationArea
                         objectName: "visualizationArea"
-                        property int presentationWorkspaceIndex: 0
 
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -75,10 +79,12 @@ Item {
                                 id: visualizationHeader
                                 objectName: "visualizationHeader"
                                 Layout.fillWidth: true
-                                workspaceIndex: visualizationArea.presentationWorkspaceIndex
-                                onWorkspaceSelected: function (index){
-                                    root.setPresentationWorkspace(index)
+                                workspaceMode: app.workspace.workspaceMode
+                                themeMode: app.themeMode
+                                onWorkspaceModeRequested: function (mode) {
+                                    app.workspace.setWorkspaceMode(mode)
                                 }
+                                onThemeToggleRequested: app.toggleThemeMode()
                             }
 
                             Loader {
@@ -86,7 +92,9 @@ Item {
                                 objectName: "workspaceLoader"
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                source: visualizationArea.presentationWorkspaceIndex === 0
+                                // Each workspace reads its camera from the view model, so
+                                // unloading the inactive one loses no state.
+                                source: app.workspace.workspaceMode === "2d"
                                     ? "../workspaces/Workspace2D.qml"
                                     : "../workspaces/Workspace3D.qml"
                             }

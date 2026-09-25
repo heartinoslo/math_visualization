@@ -19,22 +19,34 @@ Rectangle {
             font.pixelSize: 16
         }
 
-        Rectangle {
+        Slider {
+            id: progressSlider
+            objectName: "animationProgressSlider"
             Layout.fillWidth: true
-            Layout.preferredHeight: AppTheme.Theme.timelineTrackHeight
-            radius: AppTheme.Theme.timelineTrackRadius
-            color: AppTheme.Theme.surfaceLevelTwo
+            from: 0.0
+            to: 1.0
+            value: app.animation.progress
+            onMoved: app.animation.setProgress(value)
 
-            Rectangle {
-                width: parent.width * 0.35
-                height: parent.height
-                radius: parent.radius
-                color: AppTheme.Theme.accentColor
+            background: Rectangle {
+                x: progressSlider.leftPadding
+                y: progressSlider.topPadding + progressSlider.availableHeight / 2 - height / 2
+                width: progressSlider.availableWidth
+                height: AppTheme.Theme.timelineTrackHeight
+                radius: AppTheme.Theme.timelineTrackRadius
+                color: AppTheme.Theme.surfaceLevelTwo
+
+                Rectangle {
+                    width: progressSlider.visualPosition * parent.width
+                    height: parent.height
+                    radius: parent.radius
+                    color: AppTheme.Theme.accentColor
+                }
             }
 
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                x: parent.width * 0.35 - width / 2
+            handle: Rectangle {
+                x: progressSlider.leftPadding + progressSlider.visualPosition * (progressSlider.availableWidth - width)
+                y: progressSlider.topPadding + progressSlider.availableHeight / 2 - height / 2
                 width: AppTheme.Theme.timelineHandleSize
                 height: AppTheme.Theme.timelineHandleSize
                 radius: AppTheme.Theme.timelineHandleRadius
@@ -43,7 +55,8 @@ Rectangle {
         }
 
         Label {
-            text: "0%"
+            objectName: "animationProgressLabel"
+            text: Math.round(app.animation.progress * 100) + "%"
             color: AppTheme.Theme.secondaryText
             font.pixelSize: 12
         }

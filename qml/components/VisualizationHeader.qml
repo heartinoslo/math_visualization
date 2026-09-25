@@ -5,8 +5,10 @@ import "../theme" as AppTheme
 
 Rectangle {
     id: root
-    property int workspaceIndex: 0
-    signal workspaceSelected(int index)
+    property string workspaceMode: "2d"
+    property string themeMode: "dark"
+    signal workspaceModeRequested(string mode)
+    signal themeToggleRequested()
 
     implicitHeight: AppTheme.Theme.visualizationHeaderHeight
     color: AppTheme.Theme.panelBackground
@@ -29,11 +31,19 @@ Rectangle {
             Layout.fillWidth: true
         }
 
+        ToolButton {
+            objectName: "themeToggleButton"
+            text: root.themeMode === "dark" ? "Light theme" : "Dark theme"
+            implicitHeight: AppTheme.Theme.controlHeight
+            onClicked: root.themeToggleRequested()
+        }
+
         TabBar {
             id: workspaceTabs
-            currentIndex: root.workspaceIndex
+            objectName: "workspaceTabs"
+            currentIndex: root.workspaceMode === "3d" ? 1 : 0
             implicitHeight: AppTheme.Theme.controlHeight
-            onCurrentIndexChanged: root.workspaceSelected(currentIndex)
+            onCurrentIndexChanged: root.workspaceModeRequested(currentIndex === 1 ? "3d" : "2d")
 
             TabButton {
                 objectName: "workspace2DTab"

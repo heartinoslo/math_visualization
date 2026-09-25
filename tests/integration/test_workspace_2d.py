@@ -118,8 +118,8 @@ def test_view_is_preserved_across_workspace_switches() -> None:
 
     view_model.workspace.setWorkspaceMode("3d")
     application.processEvents()
-    assert window.findChild(QObject, "resetViewButton").property("visible") is False
     assert window.findChild(QObject, "camera2DSummary").property("visible") is False
+    assert window.findChild(QObject, "camera3DSummary").property("visible") is True
 
     view_model.workspace.setWorkspaceMode("2d")
     application.processEvents()

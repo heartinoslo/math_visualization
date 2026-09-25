@@ -85,7 +85,9 @@ Item {
                                     app.workspace.setWorkspaceMode(mode)
                                 }
                                 onThemeToggleRequested: app.toggleThemeMode()
-                                onResetViewRequested: app.viewport2D.resetView()
+                                onResetViewRequested: app.workspace.workspaceMode === "2d"
+                                    ? app.viewport2D.resetView()
+                                    : app.viewport3D.resetView()
                             }
 
                             Loader {

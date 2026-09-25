@@ -57,7 +57,6 @@ Rectangle {
 
         Button {
             objectName: "resetViewButton"
-            visible: root.workspaceMode === "2d"
             text: "Reset view"
             implicitHeight: AppTheme.Theme.controlHeight
             onClicked: root.resetViewRequested()

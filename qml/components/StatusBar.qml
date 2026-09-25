@@ -45,6 +45,22 @@ Rectangle {
             font.pixelSize: 12
         }
 
+        Label {
+            objectName: "camera3DSummary"
+            visible: app.workspace.workspaceMode === "3d"
+            text: app.viewport3D.cameraSummary
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+        }
+
+        Label {
+            objectName: "cursor3DCoordinates"
+            visible: app.workspace.workspaceMode === "3d" && text !== ""
+            text: app.viewport3D.cursorText
+            color: AppTheme.Theme.primaryText
+            font.pixelSize: 12
+        }
+
         Button {
             objectName: "testPythonConnectionButton"
             text: "Test Python Connection"

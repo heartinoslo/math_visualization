@@ -59,8 +59,7 @@ def test_workspace_cameras_and_progress_survive_switching() -> None:
     click(root, "workspace2DTab", application)
     summary_2d = root.findChild(QObject, "camera2DSummary").property("text")
 
-    assert "azimuth 120.0" in summary_3d
-    assert "distance 8.00" in summary_3d
+    assert summary_3d == "Azimuth 120° · Elevation 15° · Distance 8.00 · Perspective"
     assert summary_2d == "Center (1.00, -2.00) · Zoom 1.50×"
     assert view_model.animation.progress == 0.4
     assert root.findChild(QObject, "animationProgressLabel").property("text") == "40%"

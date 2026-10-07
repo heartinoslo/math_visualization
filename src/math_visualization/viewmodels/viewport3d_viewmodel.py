@@ -392,7 +392,7 @@ class Viewport3DViewModel(QObject):
                     "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
                     "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
                     "radius": radius * SCENE_UNITS_PER_MATH_UNIT,
-                    "headRadius": max(radius * 2.6, head * 0.3) * SCENE_UNITS_PER_MATH_UNIT,
+                    "headRadius": max(radius * 2.4, head * 0.26) * SCENE_UNITS_PER_MATH_UNIT,
                 }
             )
         return arrows

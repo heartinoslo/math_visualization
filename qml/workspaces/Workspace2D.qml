@@ -195,7 +195,17 @@ Rectangle {
         }
     }
 
-    // Layer 5: mathematical objects (vectors arrive in Stage 4).
+    // Layer 5: mathematical objects. Vectors are drawn from screen positions
+    // published by app.viewport2D; the selected one shows dashed component
+    // lines to both axes and a drag handle at its tip.
+    readonly property var vectorShapes: viewport.vectorShapes
+    readonly property var selectedShape: {
+        for (let i = 0; i < vectorShapes.length; ++i)
+            if (vectorShapes[i].selected)
+                return vectorShapes[i]
+        return null
+    }
+
     Item {
         id: objectLayer
         objectName: "objectLayer"
@@ -208,38 +218,162 @@ Rectangle {
             radius2D: AppTheme.Theme.originPointRadius
             color: AppTheme.Theme.axisColor
         }
+
+        Segment2D {
+            objectName: "componentLineX"
+            visible: root.selectedShape !== null && !root.selectedShape.isZero
+            dashed: true
+            lineWidth: 1
+            strokeColor: root.selectedShape ? root.selectedShape.color : "transparent"
+            x1: root.selectedShape ? root.selectedShape.tipX : 0
+            y1: root.selectedShape ? root.selectedShape.tipY : 0
+            x2: root.selectedShape ? root.selectedShape.tipX : 0
+            y2: root.originY
+        }
+
+        Segment2D {
+            objectName: "componentLineY"
+            visible: root.selectedShape !== null && !root.selectedShape.isZero
+            dashed: true
+            lineWidth: 1
+            strokeColor: root.selectedShape ? root.selectedShape.color : "transparent"
+            x1: root.selectedShape ? root.selectedShape.tipX : 0
+            y1: root.selectedShape ? root.selectedShape.tipY : 0
+            x2: root.originX
+            y2: root.selectedShape ? root.selectedShape.tipY : 0
+        }
+
+        Repeater {
+            objectName: "vectorArrows2D"
+            model: root.vectorShapes.length
+
+            delegate: Item {
+                id: vectorItem
+                required property int index
+                readonly property var shape: root.vectorShapes[index]
+                readonly property real dx: shape.tipX - root.originX
+                readonly property real dy: shape.tipY - root.originY
+                readonly property real screenLength: Math.hypot(dx, dy)
+                anchors.fill: parent
+
+                Arrow2D {
+                    visible: !vectorItem.shape.isZero
+                    x1: root.originX
+                    y1: root.originY
+                    x2: vectorItem.shape.tipX
+                    y2: vectorItem.shape.tipY
+                    strokeColor: vectorItem.shape.color
+                    lineWidth: vectorItem.shape.selected
+                        ? AppTheme.Theme.selectedVectorLineWidth : AppTheme.Theme.vectorLineWidth
+                    headLength: AppTheme.Theme.vectorHeadLength
+                    headHalfWidth: AppTheme.Theme.vectorHeadHalfWidth
+                }
+
+                // The zero vector has no direction, so it is shown as a ring.
+                Rectangle {
+                    visible: vectorItem.shape.isZero
+                    x: root.originX - width / 2
+                    y: root.originY - height / 2
+                    width: AppTheme.Theme.zeroVectorRadius * 2
+                    height: width
+                    radius: width / 2
+                    color: "transparent"
+                    border.width: 2
+                    border.color: vectorItem.shape.color
+                }
+
+                Point2D {
+                    visible: vectorItem.shape.selected
+                    centerX: vectorItem.shape.tipX
+                    centerY: vectorItem.shape.tipY
+                    radius2D: AppTheme.Theme.tipHandleRadius
+                    color: AppTheme.Theme.workspaceBackground
+                    border.width: 2
+                    border.color: vectorItem.shape.color
+                }
+
+                // Names sit just beyond the tip, away from the origin.
+                Label {
+                    readonly property real offset: 14
+                    readonly property real unitX: vectorItem.screenLength > 0 ? vectorItem.dx / vectorItem.screenLength : 0.7
+                    readonly property real unitY: vectorItem.screenLength > 0 ? vectorItem.dy / vectorItem.screenLength : -0.7
+                    text: vectorItem.shape.name
+                    x: vectorItem.shape.tipX + unitX * offset - width / 2
+                    y: vectorItem.shape.tipY + unitY * offset - height / 2
+                    color: vectorItem.shape.color
+                    font.pixelSize: AppTheme.Theme.vectorLabelPixelSize
+                    font.italic: true
+                    font.bold: vectorItem.shape.selected
+                }
+            }
+        }
     }
 
-    // Pointer input: drag to pan, wheel to zoom around the cursor,
-    // double-click to reset. Readouts live in the status bar and the reset
-    // button in the header, so nothing overlaps the canvas.
+    // Pointer input. A press on a vector tip drags it (Shift snaps to the
+    // minor grid), on a shaft selects it, and on empty space pans the view;
+    // a click on empty space clears the selection. The wheel zooms around the
+    // cursor and a double-click on empty space resets the view.
     MouseArea {
         id: pointerArea
         objectName: "viewportPointerArea"
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton
-        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.CrossCursor
+        cursorShape: mode === "pan" ? Qt.ClosedHandCursor
+            : (mode === "drag" || hoverPart === "tip") ? Qt.SizeAllCursor
+            : hoverPart === "shaft" ? Qt.PointingHandCursor
+            : Qt.CrossCursor
 
         property real lastX: 0
         property real lastY: 0
+        property string mode: ""
+        property string hoverPart: ""
+        property bool moved: false
 
         onPressed: function (mouse) {
+            root.forceActiveFocus()
             lastX = mouse.x
             lastY = mouse.y
+            moved = false
+            const part = root.viewport.beginVectorDrag(mouse.x, mouse.y)
+            mode = part === "tip" ? "drag" : part === "shaft" ? "select" : "pan"
         }
         onPositionChanged: function (mouse) {
             if (pressed) {
-                root.viewport.panBy(mouse.x - lastX, mouse.y - lastY)
+                moved = moved || Math.abs(mouse.x - lastX) + Math.abs(mouse.y - lastY) > 0
+                if (mode === "drag")
+                    root.viewport.dragVector(mouse.x, mouse.y, (mouse.modifiers & Qt.ShiftModifier) !== 0)
+                else if (mode === "pan")
+                    root.viewport.panBy(mouse.x - lastX, mouse.y - lastY)
                 lastX = mouse.x
                 lastY = mouse.y
+            } else {
+                hoverPart = root.viewport.hitTest(mouse.x, mouse.y).part
             }
             root.viewport.setCursor(mouse.x, mouse.y)
+        }
+        onReleased: {
+            if (mode === "drag")
+                root.viewport.endVectorDrag()
+            else if (mode === "pan" && !moved)
+                app.scene.clearSelection()
+            mode = ""
+        }
+        onCanceled: {
+            if (mode === "drag")
+                root.viewport.endVectorDrag()
+            mode = ""
         }
         onWheel: function (wheel) {
             root.viewport.zoomAt(wheel.x, wheel.y, wheel.angleDelta.y)
         }
-        onDoubleClicked: root.viewport.resetView()
-        onExited: root.viewport.clearCursor()
+        onDoubleClicked: function (mouse) {
+            if (root.viewport.hitTest(mouse.x, mouse.y).part === "")
+                root.viewport.resetView()
+        }
+        onExited: {
+            hoverPart = ""
+            root.viewport.clearCursor()
+        }
     }
 }

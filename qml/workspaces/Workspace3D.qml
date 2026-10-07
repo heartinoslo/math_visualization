@@ -16,6 +16,8 @@ Rectangle {
 
     readonly property var viewport: app.viewport3D
     readonly property var labels: viewport.labels
+    readonly property var vectorArrows: viewport.vectorArrows
+    readonly property var vectorLabels: viewport.vectorLabels
 
     function updateViewportSize() {
         viewport.setViewportSize(width, height)
@@ -164,6 +166,57 @@ Rectangle {
                                root.viewport.axisRadius * 2.5 / 50)
             materials: FlatMaterial { baseColor: AppTheme.Theme.primaryText }
         }
+
+        // Vectors embedded in the XY plane as (x, y, 0). Each node points its
+        // local +Y along the vector; Python supplies the rotation and sizes.
+        Repeater3D {
+            objectName: "vectorArrows3D"
+            model: root.vectorArrows.length
+
+            delegate: Node {
+                id: arrowNode
+                required property int index
+                readonly property var arrow: root.vectorArrows[index]
+                rotation: arrow.rotation
+
+                Model {
+                    visible: !arrowNode.arrow.isZero
+                    source: "#Cylinder"
+                    position: Qt.vector3d(0, arrowNode.arrow.shaftLength / 2, 0)
+                    scale: Qt.vector3d(arrowNode.arrow.radius / 50,
+                                       arrowNode.arrow.shaftLength / 100,
+                                       arrowNode.arrow.radius / 50)
+                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
+                }
+
+                Model {
+                    visible: !arrowNode.arrow.isZero
+                    source: "#Cone"
+                    position: Qt.vector3d(0, arrowNode.arrow.shaftLength, 0)
+                    scale: Qt.vector3d(arrowNode.arrow.headRadius / 50,
+                                       arrowNode.arrow.headLength / 100,
+                                       arrowNode.arrow.headRadius / 50)
+                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
+                }
+
+                // The zero vector has no direction: a small sphere at the origin.
+                Model {
+                    visible: arrowNode.arrow.isZero
+                    source: "#Sphere"
+                    scale: Qt.vector3d(arrowNode.arrow.radius * 3 / 50,
+                                       arrowNode.arrow.radius * 3 / 50,
+                                       arrowNode.arrow.radius * 3 / 50)
+                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
+                }
+            }
+        }
+
+        Model {
+            objectName: "componentLines3D"
+            visible: root.viewport.componentLinesVisible
+            geometry: root.viewport.componentLinesGeometry
+            materials: FlatMaterial { baseColor: AppTheme.Theme.secondaryText }
+        }
     }
 
     // Axis names and tick labels, projected to screen space by Python.
@@ -192,15 +245,40 @@ Rectangle {
         }
     }
 
+    Item {
+        objectName: "vectorLabelLayer3D"
+        anchors.fill: parent
+
+        Repeater {
+            objectName: "vectorLabels3D"
+            model: root.vectorLabels.length
+            delegate: Label {
+                required property int index
+                readonly property var entry: root.vectorLabels[index]
+                text: entry.name
+                x: entry.x + 8
+                y: entry.y - height - 2
+                color: entry.color
+                font.pixelSize: AppTheme.Theme.vectorLabelPixelSize
+                font.italic: true
+                font.bold: entry.selected
+            }
+        }
+    }
+
+    // Left button: drag a vector tip in the XY plane (Shift snaps to the
+    // grid), select by its shaft, or click empty space to clear the selection.
     // Right-drag orbits, middle-drag or Shift+right-drag pans, the wheel
-    // dollies and double-click resets. The left button stays free for
-    // selecting and dragging mathematical objects in Stage 4.
+    // dollies and double-click on empty space resets the camera.
     MouseArea {
         objectName: "viewport3DPointerArea"
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-        cursorShape: pressedButtons & (Qt.RightButton | Qt.MiddleButton) ? Qt.ClosedHandCursor : Qt.CrossCursor
+        cursorShape: (gesture === "pan" || gesture === "orbit") ? Qt.ClosedHandCursor
+            : (gesture === "drag" || hoverPart === "tip") ? Qt.SizeAllCursor
+            : hoverPart === "shaft" ? Qt.PointingHandCursor
+            : Qt.CrossCursor
 
         property real lastX: 0
         property real lastY: 0
@@ -208,47 +286,74 @@ Rectangle {
         // switch between panning and orbiting.
         property string gesture: ""
 
+        property bool moved: false
+        property string hoverPart: ""
+
         onPressed: function (mouse) {
             root.forceActiveFocus()
             lastX = mouse.x
             lastY = mouse.y
+            moved = false
             if (mouse.button === Qt.MiddleButton
                     || (mouse.button === Qt.RightButton && (mouse.modifiers & Qt.ShiftModifier)))
                 gesture = "pan"
             else if (mouse.button === Qt.RightButton)
                 gesture = "orbit"
-            else
-                gesture = ""
+            else {
+                const part = root.viewport.beginVectorDrag(mouse.x, mouse.y)
+                gesture = part === "tip" ? "drag" : part === "shaft" ? "select" : "empty"
+            }
         }
-        onReleased: gesture = ""
+        onReleased: {
+            if (gesture === "drag")
+                root.viewport.endVectorDrag()
+            else if (gesture === "empty" && !moved)
+                app.scene.clearSelection()
+            gesture = ""
+        }
+        onCanceled: {
+            if (gesture === "drag")
+                root.viewport.endVectorDrag()
+            gesture = ""
+        }
         onPositionChanged: function (mouse) {
             const deltaX = mouse.x - lastX
             const deltaY = mouse.y - lastY
             lastX = mouse.x
             lastY = mouse.y
+            moved = moved || deltaX !== 0 || deltaY !== 0
             if (gesture === "pan")
                 root.viewport.panBy(deltaX, deltaY)
             else if (gesture === "orbit")
                 root.viewport.orbitBy(deltaX, deltaY)
+            else if (gesture === "drag")
+                root.viewport.dragVector(mouse.x, mouse.y, (mouse.modifiers & Qt.ShiftModifier) !== 0)
+            else if (!pressed)
+                hoverPart = root.viewport.hitTest(mouse.x, mouse.y).part
             root.viewport.setCursor(mouse.x, mouse.y)
         }
         onWheel: function (wheel) {
             root.viewport.zoomBy(wheel.angleDelta.y)
         }
         onDoubleClicked: function (mouse) {
-            if (mouse.button === Qt.LeftButton)
+            if (mouse.button === Qt.LeftButton && root.viewport.hitTest(mouse.x, mouse.y).part === "")
                 root.viewport.resetView()
         }
-        onExited: root.viewport.clearCursor()
+        onExited: {
+            hoverPart = ""
+            root.viewport.clearCursor()
+        }
     }
 
     // Plan 12.4: make clear that the mathematics is 2D even though the view is 3D.
     Rectangle {
         objectName: "dimensionHint"
+        readonly property real maximumWidth: root.width - 2 * AppTheme.Theme.spacingMedium
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.margins: AppTheme.Theme.spacingMedium
-        width: hintColumn.implicitWidth + 2 * AppTheme.Theme.spacingMedium
+        width: Math.min(hintColumn.implicitWidth, maximumWidth - 2 * AppTheme.Theme.spacingMedium)
+            + 2 * AppTheme.Theme.spacingMedium
         height: hintColumn.implicitHeight + 2 * AppTheme.Theme.spacingSmall
         radius: AppTheme.Theme.panelRadius
         color: AppTheme.Theme.overlayBackground
@@ -256,20 +361,28 @@ Rectangle {
 
         ColumnLayout {
             id: hintColumn
-            anchors.centerIn: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: AppTheme.Theme.spacingMedium
+            anchors.rightMargin: AppTheme.Theme.spacingMedium
             spacing: 2
 
             Label {
                 objectName: "dimensionHintLabel"
+                Layout.fillWidth: true
                 text: "Mathematical dimension: 2D · Display workspace: 3D · Active plane: XY"
                 color: AppTheme.Theme.primaryText
                 font.pixelSize: 12
+                elide: Text.ElideRight
             }
 
             Label {
-                text: "Right-drag orbit · Middle or Shift+right-drag pan · Wheel zoom · 1/2/3 views"
+                Layout.fillWidth: true
+                text: "Left-drag tip: move · Right-drag: orbit · Middle/Shift+right-drag: pan · Wheel: zoom · 1/2/3: views"
                 color: AppTheme.Theme.secondaryText
                 font.pixelSize: 11
+                wrapMode: Text.WordWrap
             }
         }
     }

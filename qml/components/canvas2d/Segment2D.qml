@@ -10,6 +10,7 @@ Shape {
     property real y2: 0
     property color strokeColor: "white"
     property real lineWidth: 2
+    property bool dashed: false
 
     anchors.fill: parent
     preferredRendererType: Shape.CurveRenderer
@@ -18,7 +19,9 @@ Shape {
         strokeColor: root.strokeColor
         strokeWidth: root.lineWidth
         fillColor: "transparent"
-        capStyle: ShapePath.RoundCap
+        capStyle: root.dashed ? ShapePath.FlatCap : ShapePath.RoundCap
+        strokeStyle: root.dashed ? ShapePath.DashLine : ShapePath.SolidLine
+        dashPattern: [4, 3]
         startX: root.x1
         startY: root.y1
 

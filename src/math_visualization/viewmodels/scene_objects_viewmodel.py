@@ -72,7 +72,8 @@ class VectorListModel(QAbstractListModel):
         return {
             self.ObjectIdRole: QByteArray(b"objectId"),
             self.NameRole: QByteArray(b"name"),
-            self.ColorRole: QByteArray(b"color"),
+            # Not "color": a delegate's own colour property would shadow it.
+            self.ColorRole: QByteArray(b"vectorColor"),
             self.ComponentsTextRole: QByteArray(b"componentsText"),
             self.SelectedRole: QByteArray(b"selected"),
         }

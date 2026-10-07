@@ -206,3 +206,23 @@ class Viewport2D:
                 major.append(position)
                 values.append(index // step.subdivisions * step.major)
         return tuple(major), tuple(minor_lines), tuple(values)
+
+
+def distance_to_segment(
+    point: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
+) -> float:
+    """Euclidean distance from ``point`` to the segment ``start``–``end``."""
+    px, py = point
+    ax, ay = start
+    bx, by = end
+    dx, dy = bx - ax, by - ay
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0.0:
+        return math.hypot(px - ax, py - ay)
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length_squared))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def snap_to_step(value: float, step: float) -> float:
+    """Round ``value`` to the nearest multiple of ``step`` without float noise."""
+    return round(round(value / step) * step, 12) + 0.0

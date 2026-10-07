@@ -7,6 +7,8 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 from math_visualization.infrastructure.logging_config import APPLICATION_LOGGER_NAME
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
+from math_visualization.viewmodels.inspector_viewmodel import InspectorViewModel
+from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.viewport2d_viewmodel import Viewport2DViewModel
 from math_visualization.viewmodels.viewport3d_viewmodel import Viewport3DViewModel
 from math_visualization.viewmodels.workspace_viewmodel import WorkspaceViewModel
@@ -32,11 +34,12 @@ class ApplicationViewModel(QObject):
         self._theme_mode = "dark"
         self._workspace = WorkspaceViewModel(document, parent=self)
         self._animation = AnimationViewModel(document, parent=self)
-        self._viewport_2d = Viewport2DViewModel(document, self._workspace, parent=self)
-        self._viewport_3d = Viewport3DViewModel(document, self._workspace, parent=self)
-        self._workspace.errorOccurred.connect(self.reportError)
-        self._animation.errorOccurred.connect(self.reportError)
-        self._viewport_3d.errorOccurred.connect(self.reportError)
+        self._scene = SceneObjectsViewModel(document, parent=self)
+        self._inspector = InspectorViewModel(self._scene, parent=self)
+        self._viewport_2d = Viewport2DViewModel(document, self._workspace, self._scene, parent=self)
+        self._viewport_3d = Viewport3DViewModel(document, self._workspace, self._scene, parent=self)
+        for child in (self._workspace, self._animation, self._scene, self._inspector, self._viewport_3d):
+            child.errorOccurred.connect(self.reportError)
 
     @property
     def document(self) -> SceneDocument:
@@ -50,6 +53,14 @@ class ApplicationViewModel(QObject):
     @Property(QObject, constant=True)
     def animation(self) -> AnimationViewModel:
         return self._animation
+
+    @Property(QObject, constant=True)
+    def scene(self) -> SceneObjectsViewModel:
+        return self._scene
+
+    @Property(QObject, constant=True)
+    def inspector(self) -> InspectorViewModel:
+        return self._inspector
 
     @Property(QObject, constant=True)
     def viewport2D(self) -> Viewport2DViewModel:

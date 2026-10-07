@@ -53,6 +53,13 @@ QtObject {
     readonly property int axisLabelMargin: 4
     readonly property int axisLabelPixelSize: 11
     readonly property int originPointRadius: 3
+    readonly property real vectorLineWidth: 2.5
+    readonly property real selectedVectorLineWidth: 3.5
+    readonly property real vectorHeadLength: 13
+    readonly property real vectorHeadHalfWidth: 5.5
+    readonly property real tipHandleRadius: 5
+    readonly property real zeroVectorRadius: 7
+    readonly property int vectorLabelPixelSize: 15
     readonly property int leftPanelWidth: 235
     readonly property int leftPanelMinimumWidth: 180
     readonly property int centerAreaMinimumWidth: 540

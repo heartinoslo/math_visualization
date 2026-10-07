@@ -30,6 +30,14 @@ ApplicationWindow {
         value: app.themeMode === "dark"
     }
 
+    // Delete removes the selected object. Text fields consume Delete
+    // themselves while editing, so this never fires during typing.
+    Shortcut {
+        objectName: "deleteShortcut"
+        sequences: [StandardKey.Delete]
+        onActivated: app.scene.removeSelected()
+    }
+
     WorkspacePage {
         id: workspacePage
         anchors.fill: parent

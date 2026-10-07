@@ -10,8 +10,9 @@ from PySide6.QtGui import QQuaternion, QVector3D
 from math_visualization.rendering.line_geometry import LineSetGeometry
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.workspace_state import ProjectionMode
+from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.workspace_viewmodel import WorkspaceViewModel
-from math_visualization.viewport.viewport_2d import format_coordinate
+from math_visualization.viewport.viewport_2d import distance_to_segment, format_coordinate, snap_to_step
 from math_visualization.viewport.viewport_3d import (
     AUXILIARY_HALF_EXTENT_MAJORS,
     CAMERA_PRESETS,
@@ -20,6 +21,7 @@ from math_visualization.viewport.viewport_3d import (
     Grid3D,
     Viewport3D,
     grid_positions,
+    math_to_scene,
     plane_segments,
 )
 
@@ -28,6 +30,12 @@ from math_visualization.viewport.viewport_3d import (
 AXIS_RADIUS_PER_DISTANCE = 0.0022
 # Tick labels closer than this on screen are dropped so they never overlap.
 MIN_TICK_LABEL_SPACING_PX = 28.0
+# Vector arrows, relative to the camera distance so they keep their screen size.
+VECTOR_RADIUS_PER_DISTANCE = 0.0040
+SELECTED_VECTOR_RADIUS_PER_DISTANCE = 0.0058
+VECTOR_HEAD_LENGTH_PER_DISTANCE = 0.045
+TIP_HIT_RADIUS_PX = 14.0
+SHAFT_HIT_DISTANCE_PX = 6.0
 
 
 class Viewport3DViewModel(QObject):
@@ -43,17 +51,21 @@ class Viewport3DViewModel(QObject):
     gridChanged = Signal()
     cursorChanged = Signal()
     auxiliaryPlanesVisibleChanged = Signal()
+    vectorSceneChanged = Signal()
     errorOccurred = Signal(str)
 
     def __init__(
         self,
         document: SceneDocument,
         workspace: WorkspaceViewModel,
+        scene: SceneObjectsViewModel,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self._document = document
         self._workspace = workspace
+        self._scene = scene
+        self._grab_offset = (0.0, 0.0)
         self._width = 0.0
         self._height = 0.0
         self._cursor: tuple[float, float] | None = None
@@ -64,8 +76,12 @@ class Viewport3DViewModel(QObject):
         self._minor_grid = LineSetGeometry()
         self._major_grid = LineSetGeometry()
         self._auxiliary_grid = LineSetGeometry()
+        self._component_lines = LineSetGeometry()
         workspace.camera3DChanged.connect(self._refresh)
+        scene.vectorsChanged.connect(self._on_vectors_changed)
+        scene.selectionChanged.connect(self._on_vectors_changed)
         self._refresh()
+        self._on_vectors_changed()
 
     # State ------------------------------------------------------------------
 
@@ -79,8 +95,21 @@ class Viewport3DViewModel(QObject):
             self._rebuild_grid(grid)
             self.gridChanged.emit()
         self.cameraChanged.emit()
+        # Arrow thickness and label positions depend on the camera.
+        self.vectorSceneChanged.emit()
         if self._cursor is not None:
             self.cursorChanged.emit()
+
+    def _on_vectors_changed(self) -> None:
+        selected = self._scene.selected_vector
+        if selected is None or selected.vector.is_zero():
+            self._component_lines.set_segments([])
+        else:
+            x, y = selected.vector.x, selected.vector.y
+            self._component_lines.set_segments(
+                [((x, y, 0.0), (x, 0.0, 0.0)), ((x, y, 0.0), (0.0, y, 0.0))]
+            )
+        self.vectorSceneChanged.emit()
 
     def _rebuild_grid(self, grid: Grid3D) -> None:
         step = grid.step
@@ -318,3 +347,140 @@ class Viewport3DViewModel(QObject):
             camera.elevation,
             camera.distance,
         )
+
+    # Vectors ------------------------------------------------------------------
+
+    @Property(QObject, constant=True)
+    def componentLinesGeometry(self) -> LineSetGeometry:
+        """Helper lines from the selected vector's tip to the x and y axes."""
+        return self._component_lines
+
+    @Property(bool, notify=vectorSceneChanged)
+    def componentLinesVisible(self) -> bool:
+        selected = self._scene.selected_vector
+        return selected is not None and not selected.vector.is_zero()
+
+    @Property("QVariantList", notify=vectorSceneChanged)
+    def vectorArrows(self) -> list[dict]:
+        """Scene transforms of each vector arrow, embedded in the XY plane as (x, y, 0).
+
+        Each arrow node points its local +Y along the vector; the shaft and the
+        head are sized from the camera distance so they keep a steady on-screen
+        thickness, and short vectors shrink their head instead of overshooting.
+        """
+        view = self.viewport()
+        distance = view.distance
+        selected_id = self._document.selected_object_id
+        arrows = []
+        for vector in self._document.vectors:
+            selected = vector.object_id == selected_id
+            radius = distance * (SELECTED_VECTOR_RADIUS_PER_DISTANCE if selected else VECTOR_RADIUS_PER_DISTANCE)
+            length = vector.vector.length
+            head = min(distance * VECTOR_HEAD_LENGTH_PER_DISTANCE, 0.5 * length)
+            if vector.vector.is_zero():
+                rotation = QQuaternion()
+            else:
+                direction = QVector3D(*math_to_scene((vector.vector.x, vector.vector.y, 0.0))).normalized()
+                rotation = QQuaternion.rotationTo(QVector3D(0.0, 1.0, 0.0), direction)
+            arrows.append(
+                {
+                    "objectId": vector.object_id,
+                    "color": vector.color,
+                    "selected": selected,
+                    "isZero": vector.vector.is_zero(),
+                    "rotation": rotation,
+                    "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
+                    "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
+                    "radius": radius * SCENE_UNITS_PER_MATH_UNIT,
+                    "headRadius": max(radius * 2.6, head * 0.3) * SCENE_UNITS_PER_MATH_UNIT,
+                }
+            )
+        return arrows
+
+    @Property("QVariantList", notify=vectorSceneChanged)
+    def vectorLabels(self) -> list[dict]:
+        """Screen positions of vector names at their tips."""
+        view = self.viewport()
+        if view.width <= 0.0 or view.height <= 0.0:
+            return []
+        labels = []
+        for vector in self._document.vectors:
+            projection = view.project((vector.vector.x, vector.vector.y, 0.0))
+            if projection.visible:
+                labels.append(
+                    {
+                        "name": vector.name,
+                        "color": vector.color,
+                        "x": projection.x,
+                        "y": projection.y,
+                        "selected": vector.object_id == self._document.selected_object_id,
+                    }
+                )
+        return labels
+
+    @Slot(float, float, result="QVariantMap")
+    def hitTest(self, screen_x: float, screen_y: float) -> dict:
+        """Return ``{"objectId", "part"}`` using the projected tips and shafts."""
+        view = self.viewport()
+        origin = view.project((0.0, 0.0, 0.0))
+        pointer = (screen_x, screen_y)
+        selected = self._document.selected_object_id
+        best_tip = best_shaft = None
+        for vector in self._document.vectors:
+            tip = view.project((vector.vector.x, vector.vector.y, 0.0))
+            if not tip.visible:
+                continue
+            rank = vector.object_id != selected
+            tip_distance = math.hypot(screen_x - tip.x, screen_y - tip.y)
+            if tip_distance <= TIP_HIT_RADIUS_PX:
+                candidate = (tip_distance, rank, vector.object_id)
+                best_tip = min(best_tip, candidate) if best_tip else candidate
+            if origin.visible:
+                shaft_distance = distance_to_segment(pointer, (origin.x, origin.y), (tip.x, tip.y))
+                if shaft_distance <= SHAFT_HIT_DISTANCE_PX:
+                    candidate = (shaft_distance, rank, vector.object_id)
+                    best_shaft = min(best_shaft, candidate) if best_shaft else candidate
+        if best_tip:
+            return {"objectId": best_tip[2], "part": "tip"}
+        if best_shaft:
+            return {"objectId": best_shaft[2], "part": "shaft"}
+        return {"objectId": "", "part": ""}
+
+    @Slot(float, float, result=str)
+    def beginVectorDrag(self, screen_x: float, screen_y: float) -> str:
+        """Select a hit vector and start dragging it when its tip was hit."""
+        hit = self.hitTest(screen_x, screen_y)
+        if hit["part"] == "tip":
+            vector = self._document.find_vector(hit["objectId"])
+            picked = self.viewport().pick_active_plane(screen_x, screen_y)
+            if picked is None:
+                self._scene.select(hit["objectId"])
+                return "shaft"
+            self._grab_offset = (vector.vector.x - picked[0], vector.vector.y - picked[1])
+            self._scene.beginDrag(hit["objectId"])
+        elif hit["part"] == "shaft":
+            self._scene.select(hit["objectId"])
+        return hit["part"]
+
+    @Slot(float, float, bool)
+    def dragVector(self, screen_x: float, screen_y: float, snap: bool) -> None:
+        """Move the dragged tip to where the pointer ray meets the XY plane.
+
+        Intersecting with ``z = 0`` is what keeps the vector in the active
+        plane from any camera angle; rays that miss the plane are ignored.
+        """
+        if not self._scene.dragging or not (math.isfinite(screen_x) and math.isfinite(screen_y)):
+            return
+        picked = self.viewport().pick_active_plane(screen_x, screen_y)
+        if picked is None:
+            return
+        x = picked[0] + self._grab_offset[0]
+        y = picked[1] + self._grab_offset[1]
+        if snap:
+            step = self._grid.step.minor
+            x, y = snap_to_step(x, step), snap_to_step(y, step)
+        self._scene.dragTo(x, y)
+
+    @Slot()
+    def endVectorDrag(self) -> None:
+        self._scene.endDrag()

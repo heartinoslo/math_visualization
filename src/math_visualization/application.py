@@ -11,6 +11,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
+from math_visualization import __version__
 from math_visualization.infrastructure.exception_handler import install_exception_handler
 from math_visualization.infrastructure.logging_config import configure_logging
 from math_visualization.infrastructure.paths import MAIN_QML_PATH
@@ -55,7 +56,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     install_exception_handler(logger)
     application = create_gui_application(arguments)
     application.setApplicationName("Math Visualization")
-    application.setApplicationVersion("0.1.0")
+    application.setApplicationVersion(__version__)
 
     document = SceneDocument()
     view_model = ApplicationViewModel(document)
@@ -66,7 +67,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
     exit_code = application.exec()
 
-    #删除局部变量
+    # Destroy the QML engine first so no binding outlives the view models it reads.
     del engine
 
     return exit_code

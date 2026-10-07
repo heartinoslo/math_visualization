@@ -16,12 +16,6 @@ def test_package_exposes_version() -> None:
     assert math_visualization.__version__ == "0.1.0"
 
 
-# def test_application_main_returns_success() -> None:
-#     """The application bootstrap should return a successful exit code."""
-#     assert main() == 0
-
-
-
 def test_application_main_is_callable() -> None:
     """The application entry point should be callable."""
     assert callable(main)

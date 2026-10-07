@@ -1,4 +1,4 @@
-﻿# Python bytecode
+# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -43,5 +43,5 @@ tmp/
 Thumbs.db
 desktop.ini
 
-#does
+# Private documentation (kept local, never committed)
 private_docs/

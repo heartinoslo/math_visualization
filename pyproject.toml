@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-visualization"
-version = "0.1.0"
+dynamic = ["version"]
 description = "An interactive linear algebra visualization desktop application."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,20 +12,25 @@ dependencies = [
     "PySide6",
     "numpy",
     "scipy",
-
 ]
-
-
 
 [project.optional-dependencies]
 dev = [
     "pytest",
 ]
 
+[project.scripts]
+math-visualization = "math_visualization.application:main"
+
+[tool.setuptools.dynamic]
+# Single source of truth: math_visualization.__version__.
+version = { attr = "math_visualization.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Lets `pytest` import the package from src/ without an installation.
+pythonpath = ["src"]
 addopts = "-ra"

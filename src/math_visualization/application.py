@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuickControls2 import QQuickStyle
 
 from math_visualization import __version__
 from math_visualization.infrastructure.exception_handler import install_exception_handler
@@ -27,6 +29,27 @@ def create_gui_application(arguments: Sequence[str] | None = None) -> QGuiApplic
     return QGuiApplication(list(arguments) if arguments is not None else sys.argv)
 
 
+# Native styles (Windows, macOS) ignore the application palette and reject
+# customized control parts, which breaks the dark theme. Fusion honours both
+# and looks the same on every platform.
+QUICK_CONTROLS_STYLE = "Fusion"
+_style_configured = False
+
+
+def configure_controls_style() -> None:
+    """Select the Qt Quick Controls style unless QT_QUICK_CONTROLS_STYLE overrides it.
+
+    Qt accepts a style only before QML first imports QtQuick.Controls, so this
+    acts once per process; later calls (for example a second engine) do nothing.
+    """
+    global _style_configured
+    if _style_configured:
+        return
+    _style_configured = True
+    if not os.environ.get("QT_QUICK_CONTROLS_STYLE"):
+        QQuickStyle.setStyle(QUICK_CONTROLS_STYLE)
+
+
 def load_main_qml(
     engine: QQmlApplicationEngine,
     view_model: ApplicationViewModel,
@@ -40,6 +63,7 @@ def load_main_qml(
         active_logger.error("QML entry file does not exist: %s", qml_path)
         return False
 
+    configure_controls_style()
     engine.rootContext().setContextProperty("app", view_model)
     engine.load(QUrl.fromLocalFile(str(qml_path)))
 

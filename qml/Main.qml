@@ -23,6 +23,28 @@ ApplicationWindow {
     palette.button: AppTheme.Theme.surfaceLevelTwo
     palette.buttonText: AppTheme.Theme.primaryText
     palette.highlight: AppTheme.Theme.accentColor
+    palette.highlightedText: "#FFFFFF"
+    palette.placeholderText: AppTheme.Theme.secondaryText
+    palette.toolTipBase: AppTheme.Theme.panelBackground
+    palette.toolTipText: AppTheme.Theme.primaryText
+    // Bevel shades used by the Fusion style.
+    palette.light: Qt.lighter(AppTheme.Theme.surfaceLevelTwo, 1.25)
+    palette.midlight: Qt.lighter(AppTheme.Theme.surfaceLevelTwo, 1.1)
+    palette.mid: AppTheme.Theme.borderColor
+    palette.dark: Qt.darker(AppTheme.Theme.surfaceLevelTwo, 1.4)
+    palette.shadow: Qt.darker(AppTheme.Theme.windowBackground, 1.6)
+
+    // Disabled controls fade towards the background so they read as inactive.
+    // These bindings are installed after creation: declared inline, the style
+    // resolves its own palette afterwards and the disabled group is lost until
+    // the theme next changes.
+    readonly property color disabledText: Qt.alpha(AppTheme.Theme.secondaryText, 0.45)
+    Component.onCompleted: {
+        palette.disabled.buttonText = Qt.binding(function () { return root.disabledText })
+        palette.disabled.windowText = Qt.binding(function () { return root.disabledText })
+        palette.disabled.text = Qt.binding(function () { return root.disabledText })
+        palette.disabled.button = Qt.binding(function () { return AppTheme.Theme.panelBackground })
+    }
 
     Binding {
         target: AppTheme.Theme

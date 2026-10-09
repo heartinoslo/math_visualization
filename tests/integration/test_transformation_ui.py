@@ -32,10 +32,10 @@ def find_item(item: QQuickItem, name: str) -> QQuickItem | None:
 
 
 class Shell:
-    def __init__(self):
+    def __init__(self, **view_model_options):
         self.application = create_gui_application(["pytest"])
         self.document = SceneDocument()
-        self.app = ApplicationViewModel(self.document)
+        self.app = ApplicationViewModel(self.document, **view_model_options)
         self.engine = QQmlApplicationEngine()
         assert load_main_qml(self.engine, self.app)
         self.window = self.engine.rootObjects()[0]

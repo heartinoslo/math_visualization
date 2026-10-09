@@ -5,11 +5,13 @@ import logging
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
 from math_visualization.commands import CommandManager
+from math_visualization.persistence import RecentProjects, RecoveryStore
 from math_visualization.infrastructure.logging_config import APPLICATION_LOGGER_NAME
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
 from math_visualization.viewmodels.inspector_viewmodel import InspectorViewModel
 from math_visualization.viewmodels.matrix_properties_viewmodel import MatrixPropertiesViewModel
+from math_visualization.viewmodels.project_viewmodel import ProjectViewModel
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 from math_visualization.viewmodels.viewport2d_viewmodel import Viewport2DViewModel
@@ -29,7 +31,14 @@ class ApplicationViewModel(QObject):
     errorMessageChanged = Signal()
     themeModeChanged = Signal()
 
-    def __init__(self, document: SceneDocument):
+    def __init__(
+        self,
+        document: SceneDocument,
+        recent: RecentProjects | None = None,
+        recovery: RecoveryStore | None = None,
+    ):
+        """``recent`` and ``recovery`` default to in-memory / disabled, so tests
+        never touch the user's settings; :func:`application.main` passes real ones."""
         super().__init__()
         self._document = document
         self._status_message = "Ready"
@@ -51,7 +60,14 @@ class ApplicationViewModel(QObject):
         self._viewport_3d = Viewport3DViewModel(
             document, self._workspace, self._scene, self._transformation, parent=self
         )
+        self._project = ProjectViewModel(
+            document, self._commands, self.replace_document, recent, recovery, parent=self
+        )
+        self._project.statusMessage.connect(self._set_status_message)
+        self._transformation.visualStateChanged.connect(self._project.refresh_dirty)
+        self._animation.settingsChanged.connect(self._project.refresh_dirty)
         for child in (
+            self._project,
             self._workspace,
             self._animation,
             self._scene,
@@ -66,6 +82,24 @@ class ApplicationViewModel(QObject):
     def document(self) -> SceneDocument:
         """Return the single document represented by this view model."""
         return self._document
+
+    def replace_document(self, document: SceneDocument) -> None:
+        """Show ``document`` instead of the current one, with a fresh history.
+
+        The document object is shared by every view model, so it is updated in
+        place and each view model then publishes its state again.
+        """
+        self._animation.pause()
+        self._scene.endDrag()
+        self._document.replace_contents(document)
+        self._commands.clear()
+        self.clearError()
+        for child in (self._animation, self._scene, self._transformation, self._workspace):
+            child.reload()
+
+    @Property(QObject, constant=True)
+    def project(self) -> ProjectViewModel:
+        return self._project
 
     @Property(QObject, constant=True)
     def workspace(self) -> WorkspaceViewModel:
@@ -110,6 +144,11 @@ class ApplicationViewModel(QObject):
     @Property(str, notify=themeModeChanged)
     def themeMode(self) -> str:
         return self._theme_mode
+
+    def _set_status_message(self, message: str) -> None:
+        if message != self._status_message:
+            self._status_message = message
+            self.statusMessageChanged.emit()
 
     @Slot()
     def ping(self) -> None:

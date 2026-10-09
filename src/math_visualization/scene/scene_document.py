@@ -1,6 +1,6 @@
 """Domain model for one mathematical visualization document."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from uuid import uuid4
 
 from math_visualization.math_core.matrix2 import Matrix2
@@ -50,3 +50,8 @@ class SceneDocument:
             return self.vectors[self.vector_index(object_id)]
         except KeyError:
             return None
+
+    def replace_contents(self, other: "SceneDocument") -> None:
+        """Become ``other`` in place, so every view model keeps its reference."""
+        for item in fields(self):
+            setattr(self, item.name, getattr(other, item.name))

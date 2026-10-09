@@ -10,12 +10,14 @@ from math_visualization.scene.vector_object import VectorObject
 class AddVectorCommand(Command):
     """Insert a vector (at the end by default) and select it."""
 
-    label = "Add vector"
-
     def __init__(self, vector: VectorObject, index: int | None = None):
         self.vector = vector
         self._index = index
         self._previous_selection: str | None = None
+
+    @property
+    def label(self) -> str:
+        return f"Add {self.vector.name}"
 
     def execute(self, document: SceneDocument) -> None:
         if document.find_vector(self.vector.object_id) is not None:
@@ -33,13 +35,15 @@ class AddVectorCommand(Command):
 class RemoveVectorCommand(Command):
     """Delete a vector; undo restores it at its original position."""
 
-    label = "Delete vector"
-
     def __init__(self, object_id: str):
         self.object_id = object_id
         self._removed: VectorObject | None = None
         self._index = 0
         self._previous_selection: str | None = None
+
+    @property
+    def label(self) -> str:
+        return f"Delete {self._removed.name}" if self._removed is not None else "Delete vector"
 
     def execute(self, document: SceneDocument) -> None:
         self._index = document.vector_index(self.object_id)
@@ -60,8 +64,6 @@ class UpdateVectorCommand(Command):
     single undo step that spans from the first ``before`` to the last ``after``.
     """
 
-    label = "Edit vector"
-
     def __init__(self, before: VectorObject, after: VectorObject, merge_key: str | None = None):
         if before.object_id != after.object_id:
             raise ValueError("before and after must describe the same vector")
@@ -72,6 +74,14 @@ class UpdateVectorCommand(Command):
     @property
     def object_id(self) -> str:
         return self.after.object_id
+
+    @property
+    def label(self) -> str:
+        if self.before.name != self.after.name:
+            return f"Rename {self.before.name}"
+        if self.before.color != self.after.color:
+            return f"Recolor {self.after.name}"
+        return f"Move {self.after.name}"
 
     def execute(self, document: SceneDocument) -> None:
         document.vectors[document.vector_index(self.object_id)] = self.after

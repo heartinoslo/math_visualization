@@ -88,6 +88,14 @@ class TransformationViewModel(QObject):
             self.currentMatrixChanged.emit()
         self.expressionChanged.emit()
 
+    def reload(self) -> None:
+        """The document was replaced (a project was opened): publish its matrix and options."""
+        self._current = self._compute_current()
+        self.matrixChanged.emit()
+        self.currentMatrixChanged.emit()
+        self.visualStateChanged.emit()
+        self.expressionChanged.emit()
+
     def _on_command(self, command: Command) -> None:
         if isinstance(command, SetMatrixCommand):
             self.matrixChanged.emit()

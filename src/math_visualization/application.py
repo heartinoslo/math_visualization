@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
@@ -17,6 +17,8 @@ from math_visualization import __version__
 from math_visualization.infrastructure.exception_handler import install_exception_handler
 from math_visualization.infrastructure.logging_config import configure_logging
 from math_visualization.infrastructure.paths import MAIN_QML_PATH
+from math_visualization.persistence import FILE_EXTENSION, RecentProjects, RecoveryStore
+from math_visualization.persistence.recent_projects import SettingsStorage
 from math_visualization.rendering.qml_types import register_qml_types
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.application_viewmodel import ApplicationViewModel
@@ -81,15 +83,26 @@ def main(arguments: Sequence[str] | None = None) -> int:
     logger = configure_logging()
     install_exception_handler(logger)
     application = create_gui_application(arguments)
+    application.setOrganizationName("MathVisualization")
     application.setApplicationName("Math Visualization")
     application.setApplicationVersion(__version__)
 
     document = SceneDocument()
-    view_model = ApplicationViewModel(document)
+    recovery_directory = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+    view_model = ApplicationViewModel(
+        document,
+        recent=RecentProjects(SettingsStorage(QSettings())),
+        recovery=RecoveryStore(recovery_directory) if recovery_directory else None,
+    )
     engine = QQmlApplicationEngine()
 
     if not load_main_qml(engine, view_model, logger=logger):
         return 1
+
+    # A project file given on the command line (or by "Open with") is opened at once.
+    files = [argument for argument in application.arguments()[1:] if argument.lower().endswith(FILE_EXTENSION)]
+    if files:
+        view_model.project.openProject(files[0])
 
     exit_code = application.exec()
 

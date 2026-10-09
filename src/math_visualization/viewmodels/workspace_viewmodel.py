@@ -30,6 +30,12 @@ class WorkspaceViewModel(QObject):
         super().__init__(parent)
         self._document = document
 
+    def reload(self) -> None:
+        """The document was replaced (a project was opened): publish everything again."""
+        self.workspaceModeChanged.emit()
+        self.camera2DChanged.emit()
+        self.camera3DChanged.emit()
+
     @Property(str, notify=workspaceModeChanged)
     def workspaceMode(self) -> str:
         return self._document.workspace_mode.value

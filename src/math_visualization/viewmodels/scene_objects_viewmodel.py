@@ -135,6 +135,15 @@ class SceneObjectsViewModel(QObject):
             self._model.rows_changed()
             self.selectionChanged.emit()
 
+    def reload(self) -> None:
+        """The document was replaced (a project was opened): rebuild the list and selection."""
+        self.endDrag()
+        self._model.structure_changed()
+        self._last_selection = self._document.selected_object_id
+        self.vectorsChanged.emit()
+        self.selectionChanged.emit()
+        self.historyChanged.emit()
+
     @property
     def document(self) -> SceneDocument:
         return self._document

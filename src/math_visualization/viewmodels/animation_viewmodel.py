@@ -49,6 +49,12 @@ class AnimationViewModel(QObject):
         self.settingsChanged.emit()
         return True
 
+    def reload(self) -> None:
+        """The document was replaced (a project was opened): stop and publish its state."""
+        self.pause()
+        self.progressChanged.emit()
+        self.settingsChanged.emit()
+
     # Progress ------------------------------------------------------------------
 
     @Property(float, notify=progressChanged)

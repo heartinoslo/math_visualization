@@ -27,8 +27,9 @@ def record(signal) -> list:
 def test_grids_are_batched_into_three_geometries() -> None:
     _, _, viewport = make_view_model()
 
-    assert viewport.minorGridGeometry.vertex_count > viewport.majorGridGeometry.vertex_count > 0
-    assert viewport.auxiliaryGridGeometry.vertex_count > 0
+    assert len(viewport.minorGridVertices) > len(viewport.majorGridVertices) > 0
+    assert len(viewport.auxiliaryGridVertices) > 0
+    assert len(viewport.majorGridVertices) % 6 == 0
 
 
 def test_orbit_updates_camera_without_rebuilding_the_grid() -> None:

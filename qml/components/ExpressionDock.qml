@@ -42,17 +42,60 @@ Rectangle {
             }
         }
 
-        Label {
+        // The transformation as formulas. All text is produced in Python.
+        ColumnLayout {
+            objectName: "expressionContent"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: AppTheme.Theme.spacingLarge
+            Layout.leftMargin: AppTheme.Theme.spacingLarge
+            Layout.rightMargin: AppTheme.Theme.spacingLarge
+            Layout.bottomMargin: AppTheme.Theme.spacingMedium
             visible: root.expanded
-            text: "Mathematical expressions and derivation steps will appear here."
-            color: AppTheme.Theme.secondaryText
-            wrapMode: Text.WordWrap
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignHCenter
-            font.pixelSize: 13
+            spacing: 4
+
+            component FormulaLabel: Label {
+                Layout.fillWidth: true
+                color: AppTheme.Theme.primaryText
+                font.family: "monospace"
+                font.pixelSize: 13
+                elide: Text.ElideRight
+            }
+
+            FormulaLabel {
+                objectName: "targetMatrixText"
+                text: app.transformation.targetText
+            }
+
+            FormulaLabel {
+                objectName: "parameterText"
+                text: app.transformation.parameterText
+            }
+
+            FormulaLabel {
+                objectName: "currentMatrixText"
+                text: app.transformation.currentText
+            }
+
+            FormulaLabel {
+                objectName: "selectedMappingText"
+                visible: text !== ""
+                text: app.transformation.selectedMappingText
+            }
+
+            Label {
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                text: "Interpolation path: every point moves on a straight line from p to A·p, "
+                    + "as in Manim's ApplyMatrix. This is the first path offered, not the only "
+                    + "way to read the transformation."
+                color: AppTheme.Theme.secondaryText
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
         }
     }
 }

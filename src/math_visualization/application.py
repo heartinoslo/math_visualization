@@ -17,6 +17,7 @@ from math_visualization import __version__
 from math_visualization.infrastructure.exception_handler import install_exception_handler
 from math_visualization.infrastructure.logging_config import configure_logging
 from math_visualization.infrastructure.paths import MAIN_QML_PATH
+from math_visualization.rendering.qml_types import register_qml_types
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.application_viewmodel import ApplicationViewModel
 
@@ -64,6 +65,7 @@ def load_main_qml(
         return False
 
     configure_controls_style()
+    register_qml_types()
     engine.rootContext().setContextProperty("app", view_model)
     engine.load(QUrl.fromLocalFile(str(qml_path)))
 

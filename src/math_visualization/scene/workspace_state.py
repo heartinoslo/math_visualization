@@ -12,6 +12,7 @@ class WorkspaceMode(StrEnum):
 
     TWO_D = "2d"
     THREE_D = "3d"
+    ALGEBRA = "algebra"
 
 
 class ProjectionMode(StrEnum):

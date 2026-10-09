@@ -1,7 +1,8 @@
 """Commands that add, remove and edit named matrices.
 
 Each command makes the matrix it touches the active one, on execute and on
-undo, so the user always sees the edit being applied or reverted.
+undo, so the user always sees the edit being applied or reverted; the views
+then show that matrix rather than a computed operation.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ class AddMatrixCommand(Command):
         self.matrix = matrix
         self._index = index
         self._previous_active: str | None = None
+        self._previous_operation: str | None = None
 
     @property
     def label(self) -> str:
@@ -28,12 +30,15 @@ class AddMatrixCommand(Command):
             raise ValueError(f"A matrix with id {self.matrix.object_id!r} already exists")
         index = len(document.matrices) if self._index is None else self._index
         self._previous_active = document.active_matrix_id
+        self._previous_operation = document.active_operation_id
         document.matrices.insert(index, self.matrix)
         document.active_matrix_id = self.matrix.object_id
+        document.active_operation_id = None
 
     def undo(self, document: SceneDocument) -> None:
         del document.matrices[document.matrix_index(self.matrix.object_id)]
         document.active_matrix_id = self._previous_active
+        document.active_operation_id = self._previous_operation
 
 
 class RemoveMatrixCommand(Command):
@@ -86,10 +91,12 @@ class UpdateMatrixCommand(Command):
     def execute(self, document: SceneDocument) -> None:
         document.matrices[document.matrix_index(self.object_id)] = self.after
         document.active_matrix_id = self.object_id
+        document.active_operation_id = None
 
     def undo(self, document: SceneDocument) -> None:
         document.matrices[document.matrix_index(self.object_id)] = self.before
         document.active_matrix_id = self.object_id
+        document.active_operation_id = None
 
 
 MATRIX_COMMANDS = (AddMatrixCommand, RemoveMatrixCommand, UpdateMatrixCommand)

@@ -8,6 +8,11 @@ from math_visualization.commands.matrix_commands import (
     RemoveMatrixCommand,
     UpdateMatrixCommand,
 )
+from math_visualization.commands.operation_commands import (
+    OPERATION_COMMANDS,
+    AddOperationCommand,
+    RemoveOperationCommand,
+)
 from math_visualization.commands.vector_commands import (
     AddVectorCommand,
     RemoveVectorCommand,
@@ -16,11 +21,14 @@ from math_visualization.commands.vector_commands import (
 
 __all__ = [
     "MATRIX_COMMANDS",
+    "OPERATION_COMMANDS",
     "AddMatrixCommand",
+    "AddOperationCommand",
     "AddVectorCommand",
     "Command",
     "CommandManager",
     "RemoveMatrixCommand",
+    "RemoveOperationCommand",
     "RemoveVectorCommand",
     "UpdateMatrixCommand",
     "UpdateVectorCommand",

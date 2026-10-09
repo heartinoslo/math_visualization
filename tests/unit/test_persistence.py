@@ -123,7 +123,9 @@ def test_corrupt_or_foreign_content(tmp_path, content, message) -> None:
     ("change", "message"),
     [
         (lambda d: d["matrices"][0].update(entries=[[1, 2, 3], [4, 5, 6]]), "matrix must be 2x2"),
-        (lambda d: d["matrices"][0].update(size=3), "unsupported matrix size"),
+        (lambda d: d["matrices"][0].update(size=4), "unsupported matrix size"),
+        (lambda d: d["matrices"][0].update(size=3), "matrix must be 3x3"),
+        (lambda d: d.update(active_operation_id="nope"), "active_operation_id"),
         (lambda d: d.update(active_matrix_id="nope"), "active_matrix_id"),
         (lambda d: d["matrices"][1].update(id=d["matrices"][0]["id"]), "matrix ids must be unique"),
         (lambda d: d["vectors"][0].update(components=["1", 2]), "expected a number"),

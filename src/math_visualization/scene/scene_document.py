@@ -6,6 +6,7 @@ from uuid import uuid4
 from math_visualization.math_core.matrix2 import Matrix2
 from math_visualization.scene.animation_state import AnimationState
 from math_visualization.scene.matrix_object import MatrixObject, new_object_id
+from math_visualization.scene.operation_record import OperationRecord
 from math_visualization.scene.vector_object import VectorObject
 from math_visualization.scene.visual_state import VisualState
 from math_visualization.scene.workspace_state import (
@@ -22,7 +23,9 @@ class SceneDocument:
     ``vectors`` keeps creation order, which is also the drawing order; they are
     the inputs of the transformation. ``matrices`` are the named matrices; the
     active one is edited and played (``active_matrix_id`` is ``None`` only
-    when there are none). Mutate vectors and matrices through
+    when there are none). ``operations`` are computed matrix operations; when
+    ``active_operation_id`` is set, that operation is what the views explain
+    and the playback animates. Mutate vectors, matrices and operations through
     :mod:`math_visualization.commands` so every change can be undone.
     """
 
@@ -39,6 +42,8 @@ class SceneDocument:
         default_factory=lambda: [MatrixObject(new_object_id(), "A", Matrix2.identity())]
     )
     active_matrix_id: str | None = None
+    operations: list[OperationRecord] = field(default_factory=list)
+    active_operation_id: str | None = None
     visual_state: VisualState = field(default_factory=VisualState)
 
     def __post_init__(self) -> None:
@@ -68,12 +73,12 @@ class SceneDocument:
 
     @property
     def matrix(self) -> Matrix2:
-        """The transformation being shown: the active matrix, or I when there is none."""
+        """The plane transformation being shown: the active 2×2 matrix, else I."""
         active = self.active_matrix
-        return active.matrix if active is not None else Matrix2.identity()
+        return active.matrix if active is not None and isinstance(active.matrix, Matrix2) else Matrix2.identity()
 
     @matrix.setter
-    def matrix(self, value: Matrix2) -> None:
+    def matrix(self, value) -> None:
         """Set the active matrix's value directly (tests and scripts; the UI uses commands)."""
         active = self.active_matrix
         if active is None:
@@ -82,6 +87,26 @@ class SceneDocument:
             self.active_matrix_id = active.object_id
         else:
             self.matrices[self.matrix_index(active.object_id)] = MatrixObject(active.object_id, active.name, value)
+
+    # Operations -----------------------------------------------------------------
+
+    def operation_index(self, object_id: str) -> int:
+        for index, operation in enumerate(self.operations):
+            if operation.object_id == object_id:
+                return index
+        raise KeyError(object_id)
+
+    def find_operation(self, object_id: str | None) -> OperationRecord | None:
+        if object_id is None:
+            return None
+        try:
+            return self.operations[self.operation_index(object_id)]
+        except KeyError:
+            return None
+
+    @property
+    def active_operation(self) -> OperationRecord | None:
+        return self.find_operation(self.active_operation_id)
 
     # Vectors --------------------------------------------------------------------
 

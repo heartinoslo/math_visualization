@@ -6,13 +6,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
 from math_visualization.scene.vector_object import MAX_NAME_LENGTH, new_object_id
 
 # Capital letters in order; I is left out because it names the identity matrix.
 MATRIX_NAME_SEQUENCE = tuple("ABCDEFGHJKLMNPQRSTUVWXYZ")
 _SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
-# Only 2×2 for now; the size is stored so 3×3 matrices can join later.
-SUPPORTED_SIZES = (2,)
+SUPPORTED_SIZES = (2, 3)
 
 __all__ = ["MATRIX_NAME_SEQUENCE", "MatrixObject", "new_object_id", "next_matrix_name"]
 
@@ -32,11 +32,11 @@ def next_matrix_name(existing: Iterable[str]) -> str:
 
 @dataclass(frozen=True)
 class MatrixObject:
-    """A named transformation matrix."""
+    """A named 2×2 or 3×3 matrix."""
 
     object_id: str
     name: str
-    matrix: Matrix2
+    matrix: Matrix2 | Matrix3
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -44,10 +44,10 @@ class MatrixObject:
             raise ValueError("name must not be empty")
         if len(name) > MAX_NAME_LENGTH:
             raise ValueError(f"name must be at most {MAX_NAME_LENGTH} characters")
-        if not isinstance(self.matrix, Matrix2):
-            raise TypeError("matrix must be a Matrix2")
+        if not isinstance(self.matrix, (Matrix2, Matrix3)):
+            raise TypeError("matrix must be a Matrix2 or a Matrix3")
         object.__setattr__(self, "name", name)
 
     @property
     def size(self) -> int:
-        return 2
+        return self.matrix.size

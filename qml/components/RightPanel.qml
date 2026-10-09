@@ -52,13 +52,43 @@ Rectangle {
         width: scroller.availableWidth
         spacing: AppTheme.Theme.spacingMedium
 
-        // Matrix A of the transformation -------------------------------------
-        SectionTitle {
-            text: "MATRIX  A"
+        // The active matrix ----------------------------------------------------
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: AppTheme.Theme.spacingMedium
+
+            SectionTitle {
+                text: "MATRIX"
+            }
+
+            ValueField {
+                objectName: "matrixNameField"
+                visible: app.transformation.hasMatrix
+                Layout.maximumWidth: 120
+                value: app.transformation.matrixName
+                maximumLength: 24
+                font.bold: true
+                commit: function (text) { app.matrices.rename(app.matrices.activeId, text) }
+                ToolTip.visible: hovered
+                ToolTip.text: "Name of the active matrix"
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        Label {
+            objectName: "noMatrixHint"
+            Layout.fillWidth: true
+            visible: !app.transformation.hasMatrix
+            text: "No matrix. Add one with “+ Matrix” on the left."
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
         }
 
         GridLayout {
             objectName: "matrixEditor"
+            enabled: app.transformation.hasMatrix
             Layout.fillWidth: true
             columns: 2
             columnSpacing: AppTheme.Theme.spacingSmall
@@ -82,6 +112,7 @@ Rectangle {
 
         Flow {
             objectName: "matrixPresets"
+            enabled: app.transformation.hasMatrix
             Layout.fillWidth: true
             spacing: 4
 
@@ -184,7 +215,7 @@ Rectangle {
             columnSpacing: AppTheme.Theme.spacingMedium
             rowSpacing: 3
 
-            FieldLabel { text: "det A" }
+            FieldLabel { text: "det " + app.transformation.matrixName }
             Label {
                 objectName: "determinantValue"
                 text: root.matrixProperties.determinantText
@@ -234,7 +265,7 @@ Rectangle {
                 font.pixelSize: 13
             }
 
-            FieldLabel { text: "A⁻¹" ; Layout.alignment: Qt.AlignTop }
+            FieldLabel { text: app.transformation.matrixName + "⁻¹" ; Layout.alignment: Qt.AlignTop }
             Item {
                 Layout.fillWidth: true
                 implicitHeight: root.matrixProperties.invertible ? inverseGrid.implicitHeight : noInverse.implicitHeight
@@ -263,7 +294,7 @@ Rectangle {
                     id: noInverse
                     objectName: "noInverseText"
                     visible: !root.matrixProperties.invertible
-                    text: "none (det A = 0)"
+                    text: "none (det " + app.transformation.matrixName + " = 0)"
                     color: AppTheme.Theme.secondaryText
                     font.pixelSize: 13
                 }
@@ -272,13 +303,13 @@ Rectangle {
 
         Button {
             objectName: "applyInverseButton"
-            text: "Apply A⁻¹"
+            text: "Apply " + app.transformation.matrixName + "⁻¹"
             implicitHeight: AppTheme.Theme.compactControlHeight
             font.pixelSize: 12
             enabled: root.matrixProperties.invertible
             onClicked: root.matrixProperties.applyInverse()
             ToolTip.visible: hovered
-            ToolTip.text: "Replace A by its inverse (undoable)"
+            ToolTip.text: "Replace " + app.transformation.matrixName + " by its inverse (undoable)"
         }
 
         Rectangle {

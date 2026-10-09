@@ -11,6 +11,7 @@ from math_visualization.rendering.line_geometry import LineSetGeometry
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.workspace_state import ProjectionMode
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
+from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 from math_visualization.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from math_visualization.viewport.viewport_2d import distance_to_segment, format_coordinate, snap_to_step
 from math_visualization.viewport.viewport_3d import (
@@ -59,12 +60,14 @@ class Viewport3DViewModel(QObject):
         document: SceneDocument,
         workspace: WorkspaceViewModel,
         scene: SceneObjectsViewModel,
+        transformation: TransformationViewModel,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self._document = document
         self._workspace = workspace
         self._scene = scene
+        self._transformation = transformation
         self._grab_offset = (0.0, 0.0)
         self._width = 0.0
         self._height = 0.0

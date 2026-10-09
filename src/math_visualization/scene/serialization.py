@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from math_visualization.math_core.matrix2 import Matrix2
 from math_visualization.math_core.vector2 import Vector2
 from math_visualization.scene.animation_state import AnimationState
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.vector_object import VectorObject
+from math_visualization.scene.visual_state import VISUAL_FLAGS, VisualState
 from math_visualization.scene.workspace_state import (
     CameraState2D,
     CameraState3D,
@@ -49,10 +51,15 @@ def document_to_dict(document: SceneDocument) -> dict[str, Any]:
             "distance": camera_3d.distance,
             "projection_mode": camera_3d.projection_mode.value,
         },
+        "matrix": [list(row) for row in document.matrix.rows],
         "animation": {
             "progress": document.animation_state.progress,
             "duration": document.animation_state.duration,
+            "rate_function": document.animation_state.rate_function,
+            "playback_speed": document.animation_state.playback_speed,
+            "interpolation": document.animation_state.interpolation,
         },
+        "visual_state": {name: getattr(document.visual_state, name) for name in VISUAL_FLAGS},
         "vectors": [
             {
                 "id": vector.object_id,
@@ -93,6 +100,15 @@ def _document_from_dict(data: Any) -> SceneDocument:
     target = camera_3d["target"]
     _require(isinstance(target, list) and len(target) == 3, "3D target must have three numbers")
     animation = data["animation"]
+    rows = data["matrix"]
+    _require(
+        isinstance(rows, list) and len(rows) == 2 and all(isinstance(r, list) and len(r) == 2 for r in rows),
+        "matrix must be 2x2",
+    )
+    visual = data["visual_state"]
+    _require(isinstance(visual, dict), "visual_state must be an object")
+    for name in VISUAL_FLAGS:
+        _require(isinstance(visual[name], bool), f"visual_state.{name} must be a boolean")
 
     vectors: list[VectorObject] = []
     for entry in data["vectors"]:
@@ -137,7 +153,12 @@ def _document_from_dict(data: Any) -> SceneDocument:
         animation_state=AnimationState(
             progress=_number(animation["progress"]),
             duration=_number(animation["duration"]),
+            rate_function=_string(animation["rate_function"], "rate_function"),
+            playback_speed=_number(animation["playback_speed"]),
+            interpolation=_string(animation["interpolation"], "interpolation"),
         ),
+        matrix=Matrix2(*(_number(value) for row in rows for value in row)),
+        visual_state=VisualState(**{name: visual[name] for name in VISUAL_FLAGS}),
         vectors=vectors,
         selected_object_id=selected,
     )

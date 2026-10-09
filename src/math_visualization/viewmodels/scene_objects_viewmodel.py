@@ -34,6 +34,7 @@ from math_visualization.viewmodels.formatting import format_number
 
 
 DEFAULT_NEW_VECTOR = Vector2(1.0, 1.0)
+VECTOR_COMMANDS = (AddVectorCommand, RemoveVectorCommand, UpdateVectorCommand)
 
 
 class VectorListModel(QAbstractListModel):
@@ -99,11 +100,17 @@ class SceneObjectsViewModel(QObject):
     historyChanged = Signal()
     errorOccurred = Signal(str)
 
-    def __init__(self, document: SceneDocument, parent: QObject | None = None):
+    def __init__(
+        self,
+        document: SceneDocument,
+        commands: CommandManager | None = None,
+        parent: QObject | None = None,
+    ):
         super().__init__(parent)
         self._document = document
         self._model = VectorListModel(document, self)
-        self._commands = CommandManager(document, self._on_command)
+        self._commands = commands or CommandManager(document)
+        self._commands.add_listener(self._on_command)
         self._drag_key: str | None = None
         self._drag_id: str | None = None
         self._last_selection = document.selected_object_id
@@ -111,12 +118,14 @@ class SceneObjectsViewModel(QObject):
     # Observation ------------------------------------------------------------
 
     def _on_command(self, command: Command) -> None:
+        self.historyChanged.emit()
+        if not isinstance(command, VECTOR_COMMANDS):
+            return
         if isinstance(command, UpdateVectorCommand):
             self._model.rows_changed()
         else:
             self._model.structure_changed()
         self.vectorsChanged.emit()
-        self.historyChanged.emit()
         self._sync_selection()
 
     def _sync_selection(self) -> None:

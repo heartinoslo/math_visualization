@@ -7,6 +7,7 @@ import math
 from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QQuaternion, QVector3D
 
+from math_visualization.math_core.matrix_analysis import analyze
 from math_visualization.math_core.vector2 import Vector2
 from math_visualization.rendering.line_geometry import fan_triangles, flatten
 from math_visualization.scene.scene_document import SceneDocument
@@ -27,9 +28,18 @@ from math_visualization.viewport.viewport_3d import (
     plane_segments,
 )
 from math_visualization.viewport.transformation_geometry import (
+    line_through_origin,
     lines_per_side,
+    orientation_arc,
+    ribbon,
     transformed_grid,
     unit_square,
+)
+from math_visualization.viewmodels.overlay_sizes import (
+    ORIENTATION_ARC_MAX_FRACTION,
+    ORIENTATION_ARC_RADIUS_PX,
+    ORIENTATION_HEAD_HALF_WIDTH_PX,
+    ORIENTATION_HEAD_LENGTH_PX,
 )
 
 
@@ -49,6 +59,13 @@ TIP_HIT_RADIUS_PX = 14.0
 # Height of the transformation layer above the plane, as a fraction of the grid step.
 TRANSFORMED_LAYER_LIFT = 0.002
 SHAFT_HIT_DISTANCE_PX = 6.0
+# Determinant feedback drawn as flat strips in the plane, sized in pixels at the origin.
+ORIENTATION_ARC_WIDTH_PX = 2.0
+IMAGE_LINE_WIDTH_PX = 3.0
+KERNEL_LINE_WIDTH_PX = 2.0
+KERNEL_DASH_PX = 9.0
+KERNEL_GAP_PX = 6.0
+MAX_KERNEL_DASHES = 400
 
 
 class Viewport3DViewModel(QObject):
@@ -100,6 +117,8 @@ class Viewport3DViewModel(QObject):
         scene.vectorsChanged.connect(self._on_vectors_changed)
         transformation.currentMatrixChanged.connect(self._on_transformation_changed)
         transformation.visualStateChanged.connect(self.vectorSceneChanged)
+        # The kernel line belongs to the target matrix, which can change while A(t) does not.
+        transformation.matrixChanged.connect(self.vectorSceneChanged)
         scene.selectionChanged.connect(self._on_vectors_changed)
         self._refresh()
         self._on_vectors_changed()
@@ -579,3 +598,68 @@ class Viewport3DViewModel(QObject):
     @Slot()
     def endVectorDrag(self) -> None:
         self._scene.endDrag()
+
+    @Property("QVariantMap", notify=vectorSceneChanged)
+    def determinantOverlay(self) -> dict:
+        """Visual feedback for det, orientation and rank (see the 2D view model).
+
+        Strips are triangles in mathematical coordinates, lifted just above the
+        transformation layer; the determinant label is projected to the screen.
+        """
+        view = self.viewport()
+        current = self._transformation.current_matrix()
+        live = analyze(current)
+        target = analyze(self._document.matrix)
+        visual = self._document.visual_state
+        overlay = {
+            "flipped": live.determinant < 0.0 and live.is_invertible,
+            "collapsedToOrigin": live.rank == 0,
+            "arcVertices": [],
+            "imageLineVertices": [],
+            "kernelVertices": [],
+            "labelVisible": False,
+            "labelX": 0.0,
+            "labelY": 0.0,
+        }
+        if view.width <= 0.0 or view.height <= 0.0 or self._grid is None:
+            return overlay
+        label = view.project((*current.apply_point(0.5, 0.5), 0.0))
+        overlay.update(labelVisible=label.visible, labelX=label.x, labelY=label.y)
+        units = view.units_per_pixel((0.0, 0.0, 0.0))
+        lift = 2.0 * self._grid.step.major * TRANSFORMED_LAYER_LIFT
+
+        def strip(triangles) -> list[float]:
+            return flatten([[(x, y, lift) for x, y in triangles]])
+
+        if visual.show_orientation_arc:
+            shortest = min(current.first_column.length, current.second_column.length)
+            arc = orientation_arc(
+                current,
+                min(ORIENTATION_ARC_RADIUS_PX * units, ORIENTATION_ARC_MAX_FRACTION * shortest),
+                ORIENTATION_HEAD_LENGTH_PX * units,
+                ORIENTATION_HEAD_HALF_WIDTH_PX * units,
+            )
+            if arc is not None:
+                points, head = arc
+                overlay["arcVertices"] = strip(ribbon(points, ORIENTATION_ARC_WIDTH_PX / 2.0 * units) + head)
+        reach = self._grid.half_extent + math.hypot(self._grid.center_x, self._grid.center_y)
+        if live.image_direction is not None:
+            direction = live.image_direction
+            line = list(line_through_origin((direction.x, direction.y), reach))
+            overlay["imageLineVertices"] = strip(ribbon(line, IMAGE_LINE_WIDTH_PX / 2.0 * units))
+        if visual.show_kernel and target.kernel_direction is not None:
+            direction = target.kernel_direction
+            # Far from the origin the dashes would be tiny and countless: stretch them.
+            stretch = max(1.0, 2.0 * reach / ((KERNEL_DASH_PX + KERNEL_GAP_PX) * units * MAX_KERNEL_DASHES))
+            dash = KERNEL_DASH_PX * units * stretch
+            period = (KERNEL_DASH_PX + KERNEL_GAP_PX) * units * stretch
+            triangles = []
+            # Dashes centred on the origin so the pattern is symmetric.
+            start = -math.ceil(reach / period) * period - dash / 2.0
+            while start < reach:
+                ends = [(start * direction.x, start * direction.y),
+                        ((start + dash) * direction.x, (start + dash) * direction.y)]
+                triangles.extend(ribbon(ends, KERNEL_LINE_WIDTH_PX / 2.0 * units))
+                start += period
+            overlay["kernelVertices"] = strip(triangles)
+        return overlay

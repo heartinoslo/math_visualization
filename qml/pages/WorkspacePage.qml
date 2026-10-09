@@ -8,6 +8,9 @@ Item {
     id: root
     objectName: "workspacePage"
 
+    // Restoring replaces the current document, so Main.qml checks for unsaved changes first.
+    signal restoreRecoveryRequested()
+
     function testPythonConnection() {
         statusBar.testPythonConnection()
     }
@@ -49,6 +52,15 @@ Item {
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: AppTheme.Theme.spacingMedium
+
+                    RecoveryBanner {
+                        objectName: "recoveryBanner"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: AppTheme.Theme.errorBannerHeight
+                        visible: app.project.recoveryAvailable
+                        onRestoreRequested: root.restoreRecoveryRequested()
+                        onDiscardRequested: app.project.discardRecovery()
+                    }
 
                     ErrorBanner {
                         objectName: "errorBanner"

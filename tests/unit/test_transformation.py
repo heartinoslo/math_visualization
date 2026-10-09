@@ -125,7 +125,7 @@ def test_bad_entries_and_unknown_presets_are_rejected() -> None:
     document, app = make_app()
 
     assert not app.transformation.setEntryText(1, "abc")
-    assert "Matrix entry b" in app.errorMessage
+    assert "Matrix entry a₁₂" in app.errorMessage
     assert not app.transformation.applyPreset("spin")
     assert document.matrix == Matrix2.identity()
 

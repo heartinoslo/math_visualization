@@ -29,6 +29,23 @@ class AnimationViewModel(QObject):
         super().__init__(parent)
         self._document = document
         self._playing = False
+        # A computed operation plays one segment per step, each lasting ``duration``.
+        self._segments = 1
+
+    def set_segments(self, count: int) -> None:
+        """Play ``count`` segments of ``duration`` seconds each (1 for a plain transformation)."""
+        count = max(1, int(count))
+        if count != self._segments:
+            self._segments = count
+            self.settingsChanged.emit()
+
+    @Property(int, notify=settingsChanged)
+    def segments(self) -> int:
+        return self._segments
+
+    @Property(float, notify=settingsChanged)
+    def totalDuration(self) -> float:
+        return self._state.duration * self._segments
 
     @property
     def _state(self):
@@ -116,7 +133,7 @@ class AnimationViewModel(QObject):
         if not self._playing or not math.isfinite(seconds) or seconds <= 0.0:
             return
         state = self._state
-        progress = min(1.0, state.progress + seconds * state.playback_speed / state.duration)
+        progress = min(1.0, state.progress + seconds * state.playback_speed / (state.duration * self._segments))
         self._update_state(progress=progress)
         if progress >= 1.0:
             self._set_playing(False)
@@ -125,7 +142,12 @@ class AnimationViewModel(QObject):
 
     @Property(float, notify=settingsChanged)
     def duration(self) -> float:
+        """Seconds per segment: the whole transformation, or one step of an operation."""
         return self._state.duration
+
+    @Slot(float)
+    def setDuration(self, seconds: float) -> None:
+        self._update_state(duration=seconds)
 
     @Property(float, notify=settingsChanged)
     def playbackSpeed(self) -> float:

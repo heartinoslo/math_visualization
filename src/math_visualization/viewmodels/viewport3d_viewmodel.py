@@ -84,6 +84,7 @@ class Viewport3DViewModel(QObject):
     transformationLayerChanged = Signal()
     vectorSceneChanged = Signal()
     errorOccurred = Signal(str)
+    figuresChanged = Signal()
 
     def __init__(
         self,
@@ -95,6 +96,8 @@ class Viewport3DViewModel(QObject):
     ):
         super().__init__(parent)
         self._document = document
+        # Matrices drawn as objects (operations, 3×3); set by the application view model.
+        self._figure_source = lambda: None
         self._workspace = workspace
         self._scene = scene
         self._transformation = transformation
@@ -126,6 +129,11 @@ class Viewport3DViewModel(QObject):
 
     # State ------------------------------------------------------------------
 
+    def set_figure_source(self, source) -> None:
+        """``source()`` returns the :class:`FigureScene` to draw, or ``None``."""
+        self._figure_source = source
+        self.figuresChanged.emit()
+
     @property
     def viewport_size(self) -> tuple[float, float]:
         """Size of the canvas in pixels (0 × 0 until QML lays it out)."""
@@ -144,6 +152,7 @@ class Viewport3DViewModel(QObject):
         self.cameraChanged.emit()
         # Arrow thickness and label positions depend on the camera.
         self.vectorSceneChanged.emit()
+        self.figuresChanged.emit()
         if self._cursor is not None:
             self.cursorChanged.emit()
 
@@ -430,29 +439,37 @@ class Viewport3DViewModel(QObject):
         return selected is not None and not selected.vector.is_zero()
 
     def _arrow(self, value: Vector2, selected: bool = False) -> dict:
-        """Scene transform of an arrow from the origin to ``value`` embedded as (x, y, 0).
+        """Scene transform of an arrow from the origin to ``value`` embedded as (x, y, 0)."""
+        return self._arrow_between((0.0, 0.0, 0.0), (value.x, value.y, 0.0), selected)
 
-        The node points its local +Y along the vector. Shaft and head are sized
-        in screen pixels like the 2D arrows: the shaft at the depth of its
-        midpoint, the head at the depth of the tip. Short vectors shrink their
-        head instead of overshooting.
+    def _arrow_between(self, start, end, selected: bool = False) -> dict:
+        """Scene transform of an arrow from ``start`` to ``end`` (mathematical points).
+
+        The node sits at ``start`` and points its local +Y along the arrow.
+        Shaft and head are sized in screen pixels like the 2D arrows: the
+        shaft at the depth of its midpoint, the head at the depth of the tip.
+        Short arrows shrink their head instead of overshooting.
         """
         view = self.viewport()
+        delta = tuple(e - s for s, e in zip(start, end))
+        length = math.sqrt(sum(c * c for c in delta))
+        middle = tuple(s + 0.5 * d for s, d in zip(start, delta))
         width = SELECTED_VECTOR_LINE_WIDTH_PX if selected else VECTOR_LINE_WIDTH_PX
-        radius = width / 2.0 * view.units_per_pixel((value.x / 2.0, value.y / 2.0, 0.0))
-        tip_units = view.units_per_pixel((value.x, value.y, 0.0))
-        length = value.length
+        radius = width / 2.0 * view.units_per_pixel(middle)
+        tip_units = view.units_per_pixel(tuple(end))
         head = min(VECTOR_HEAD_LENGTH_PX * tip_units, MAX_HEAD_FRACTION * length)
         # A shortened head keeps the 2D head's proportions but never gets narrower than the shaft.
         head_radius = max(radius * 1.5, head * VECTOR_HEAD_HALF_WIDTH_PX / VECTOR_HEAD_LENGTH_PX)
-        if value.is_zero():
+        is_zero = length <= 1e-9
+        if is_zero:
             rotation = QQuaternion()
         else:
-            direction = QVector3D(*math_to_scene((value.x, value.y, 0.0))).normalized()
+            direction = QVector3D(*math_to_scene(delta)).normalized()
             rotation = QQuaternion.rotationTo(QVector3D(0.0, 1.0, 0.0), direction)
         return {
             "selected": selected,
-            "isZero": value.is_zero(),
+            "isZero": is_zero,
+            "position": QVector3D(*math_to_scene(tuple(start))),
             "rotation": rotation,
             "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
             "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
@@ -668,3 +685,44 @@ class Viewport3DViewModel(QObject):
                 start += period
             overlay["kernelVertices"] = strip(triangles)
         return overlay
+
+    # Matrices drawn as objects ----------------------------------------------------------------
+
+    @Property("QVariantMap", notify=figuresChanged)
+    def figures(self) -> dict:
+        """Operations and 3×3 matrices as arrows and the shapes their columns span.
+
+        Fills and edges are flat vertex lists in mathematical coordinates (for
+        the QML-owned geometries); labels are projected to the screen.
+        """
+        scene = self._figure_source()
+        empty = {"visible": False, "arrows": [], "resultFill": [], "operandFill": [], "edges": [], "labels": []}
+        if scene is None:
+            return empty
+        view = self.viewport()
+        arrows = []
+        for arrow in scene.arrows:
+            entry = self._arrow_between(arrow.start, arrow.end, arrow.role == "result")
+            entry.update(column=arrow.column, role=arrow.role)
+            arrows.append(entry)
+        fills = {"result": [], "operand": []}
+        edges = []
+        for figure in scene.figures:
+            faces = [figure.polygon()] if scene.size == 2 else figure.faces()
+            fills[figure.role].extend(triangle for face in faces for triangle in fan_triangles(face))
+            if figure.role == "result":
+                edges.extend(figure.edges())
+        labels = []
+        if view.width > 0.0 and view.height > 0.0:
+            for figure in scene.figures:
+                projection = view.project(figure.corner)
+                if figure.label and projection.visible:
+                    labels.append({"x": projection.x, "y": projection.y, "text": figure.label, "role": figure.role})
+        return {
+            "visible": True,
+            "arrows": arrows,
+            "resultFill": flatten(fills["result"]),
+            "operandFill": flatten(fills["operand"]),
+            "edges": flatten(edges),
+            "labels": labels,
+        }

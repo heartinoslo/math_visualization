@@ -97,9 +97,12 @@ Item {
                                     app.workspace.setWorkspaceMode(mode)
                                 }
                                 onThemeToggleRequested: app.toggleThemeMode()
-                                onResetViewRequested: app.workspace.workspaceMode === "2d"
-                                    ? app.viewport2D.resetView()
-                                    : app.viewport3D.resetView()
+                                onResetViewRequested: {
+                                    if (app.workspace.workspaceMode === "2d")
+                                        app.viewport2D.resetView()
+                                    else if (app.workspace.workspaceMode === "3d")
+                                        app.viewport3D.resetView()
+                                }
                             }
 
                             Loader {
@@ -111,7 +114,9 @@ Item {
                                 // unloading the inactive one loses no state.
                                 source: app.workspace.workspaceMode === "2d"
                                     ? "../workspaces/Workspace2D.qml"
-                                    : "../workspaces/Workspace3D.qml"
+                                    : app.workspace.workspaceMode === "3d"
+                                        ? "../workspaces/Workspace3D.qml"
+                                        : "../workspaces/WorkspaceAlgebra.qml"
                             }
                         }
                     }

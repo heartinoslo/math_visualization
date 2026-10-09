@@ -6,10 +6,20 @@ from dataclasses import replace
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
-from math_visualization.commands import MATRIX_COMMANDS, Command, CommandManager, UpdateMatrixCommand
+from math_visualization.commands import (
+    MATRIX_COMMANDS,
+    OPERATION_COMMANDS,
+    Command,
+    CommandManager,
+    UpdateMatrixCommand,
+)
 from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
+from math_visualization.math_core.matrix_algebra import identity, lerp
 from math_visualization.math_core.transformations import (
+    MATRIX3_PRESETS,
     MATRIX_PRESETS,
+    PRESETS3_BY_KEY,
     PRESETS_BY_KEY,
     ease,
     interpolate_from_identity,
@@ -22,14 +32,14 @@ from math_visualization.viewmodels.formatting import format_number, parse_number
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 
 
-ENTRY_NAMES = ("a", "b", "c", "d")
+def entry_name(size: int, index: int) -> str:
+    """``a₁₂``-style name of a row-major entry index."""
+    row, column = divmod(index, size)
+    return f"a{row + 1}{column + 1}".translate(str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉"))
 
 
-def format_matrix(matrix: Matrix2, decimals: int = 2) -> str:
-    rows = (
-        f"{format_number(first, decimals)}  {format_number(second, decimals)}"
-        for first, second in matrix.rows
-    )
+def format_matrix(matrix: Matrix2 | Matrix3, decimals: int = 2) -> str:
+    rows = ("  ".join(format_number(value, decimals) for value in row) for row in matrix.rows)
     return "[ " + " ; ".join(rows) + " ]"
 
 
@@ -79,7 +89,23 @@ class TransformationViewModel(QObject):
     def is_identity_now(self) -> bool:
         return self._current == Matrix2.identity()
 
+    @property
+    def shows_transformation(self) -> bool:
+        """Whether the views show the active matrix as a plane transformation.
+
+        They do for a 2×2 matrix; a 3×3 matrix and a computed operation are
+        shown as objects (columns and the shape they span) instead.
+        """
+        active = self._document.active_matrix
+        return (
+            active is not None
+            and isinstance(active.matrix, Matrix2)
+            and self._document.active_operation_id is None
+        )
+
     def _compute_current(self) -> Matrix2:
+        if not self.shows_transformation:
+            return Matrix2.identity()
         return interpolate_from_identity(self._document.matrix, self.parameter)
 
     def _refresh_current(self) -> None:
@@ -98,7 +124,7 @@ class TransformationViewModel(QObject):
         self.expressionChanged.emit()
 
     def _on_command(self, command: Command) -> None:
-        if isinstance(command, MATRIX_COMMANDS):
+        if isinstance(command, MATRIX_COMMANDS + OPERATION_COMMANDS):
             self.active_matrix_changed()
 
     def active_matrix_changed(self) -> None:
@@ -112,6 +138,15 @@ class TransformationViewModel(QObject):
     def hasMatrix(self) -> bool:
         return self._document.active_matrix is not None
 
+    @Property(bool, notify=matrixChanged)
+    def showsTransformation(self) -> bool:
+        return self.shows_transformation
+
+    @Property(int, notify=matrixChanged)
+    def matrixSize(self) -> int:
+        active = self._document.active_matrix
+        return active.size if active is not None else 2
+
     @Property(str, notify=matrixChanged)
     def matrixName(self) -> str:
         """Name of the active matrix ("A" when there is none, for the formulas)."""
@@ -120,38 +155,50 @@ class TransformationViewModel(QObject):
 
     @Property("QStringList", notify=matrixChanged)
     def entryTexts(self) -> list[str]:
-        return [format_number(value) for value in self._document.matrix.entries]
+        active = self._document.active_matrix
+        matrix = active.matrix if active is not None else Matrix2.identity()
+        return [format_number(value) for value in matrix.entries]
 
     @Slot(int, str, result=bool)
     def setEntryText(self, index: int, text: str) -> bool:
-        if not 0 <= index < 4:
+        active = self._document.active_matrix
+        if active is None:
+            self.errorOccurred.emit("There is no matrix to edit; add one first")
+            return False
+        size = active.size
+        if not 0 <= index < size * size:
             return False
         try:
             value = parse_number(text)
         except ValueError as error:
-            self.errorOccurred.emit(f"Matrix entry {ENTRY_NAMES[index]}: {error}")
+            self.errorOccurred.emit(f"Matrix entry {entry_name(size, index)}: {error}")
             return False
-        entries = list(self._document.matrix.entries)
+        entries = list(active.matrix.entries)
         entries[index] = value
-        return self.set_matrix(Matrix2(*entries))
+        return self.set_matrix(Matrix2(*entries) if size == 2 else Matrix3(tuple(entries)))
 
-    @Property("QVariantList", constant=True)
+    @Property("QVariantList", notify=matrixChanged)
     def presets(self) -> list[dict]:
-        return [{"key": preset.key, "label": preset.label} for preset in MATRIX_PRESETS]
+        presets = MATRIX3_PRESETS if self.matrixSize == 3 else MATRIX_PRESETS
+        return [{"key": preset.key, "label": preset.label} for preset in presets]
 
     @Slot(str, result=bool)
     def applyPreset(self, key: str) -> bool:
-        preset = PRESETS_BY_KEY.get(key)
+        presets = PRESETS3_BY_KEY if self.matrixSize == 3 else PRESETS_BY_KEY
+        preset = presets.get(key)
         if preset is None:
             self.errorOccurred.emit(f"Unknown matrix preset: {key!r}")
             return False
         return self.set_matrix(preset.matrix)
 
-    def set_matrix(self, matrix: Matrix2) -> bool:
+    def set_matrix(self, matrix: Matrix2 | Matrix3) -> bool:
         """Replace the active matrix's entries through an undoable command."""
         active = self._document.active_matrix
         if active is None:
             self.errorOccurred.emit("There is no matrix to edit; add one first")
+            return False
+        if matrix.size != active.size:
+            self.errorOccurred.emit(f"{active.name} is {active.size}×{active.size}")
             return False
         if matrix != active.matrix:
             self._commands.execute(UpdateMatrixCommand(active, MatrixObject(active.object_id, active.name, matrix)))
@@ -178,7 +225,8 @@ class TransformationViewModel(QObject):
 
     @Property(str, notify=matrixChanged)
     def targetText(self) -> str:
-        return f"{self.matrixName} = " + format_matrix(self._document.matrix)
+        active = self._document.active_matrix
+        return f"{self.matrixName} = " + format_matrix(active.matrix if active is not None else Matrix2.identity())
 
     @Property(str, notify=expressionChanged)
     def parameterText(self) -> str:
@@ -188,7 +236,14 @@ class TransformationViewModel(QObject):
     @Property(str, notify=expressionChanged)
     def currentText(self) -> str:
         name = self.matrixName
-        return f"{name}(t) = (1 − t)·I + t·{name} = " + format_matrix(self._current)
+        operation = self._document.active_operation
+        if operation is not None:
+            return f"Showing the operation {operation.title}"
+        active = self._document.active_matrix
+        current = self._current
+        if active is not None and active.size == 3:
+            current = lerp(identity(3), active.matrix, self.parameter)
+        return f"{name}(t) = (1 − t)·I + t·{name} = " + format_matrix(current)
 
     @Property(str, notify=expressionChanged)
     def selectedMappingText(self) -> str:

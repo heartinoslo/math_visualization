@@ -191,6 +191,8 @@ Rectangle {
     Item {
         objectName: "transformationLayer"
         anchors.fill: parent
+        // A 3×3 matrix or a computed operation is shown as figures instead.
+        visible: app.transformation.showsTransformation
 
         Shape {
             objectName: "unitSquare"
@@ -307,6 +309,96 @@ Rectangle {
             background: Rectangle {
                 radius: 3
                 color: AppTheme.Theme.overlayBackground
+            }
+        }
+    }
+
+    // Matrices as objects: each column an arrow (î/ĵ colours), the result
+    // solid and the operands faint, with the parallelogram the columns span.
+    readonly property var figureShapes: viewport.figureShapes
+
+    Item {
+        objectName: "figureLayer"
+        anchors.fill: parent
+        visible: root.figureShapes.visible
+
+        Repeater {
+            model: root.figureShapes.polygons
+            delegate: Shape {
+                id: polygonShape
+                required property var modelData
+                readonly property bool isResult: modelData.role === "result"
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+
+                ShapePath {
+                    strokeColor: polygonShape.isResult ? AppTheme.Theme.resultColor : AppTheme.Theme.secondaryText
+                    strokeWidth: 1
+                    strokeStyle: polygonShape.isResult ? ShapePath.SolidLine : ShapePath.DashLine
+                    dashPattern: [4, 3]
+                    fillColor: polygonShape.isResult ? Qt.alpha(AppTheme.Theme.resultColor, 0.22) : "transparent"
+                    PathPolyline { path: root.polygonPath(polygonShape.modelData.points) }
+                }
+            }
+        }
+
+        Repeater {
+            objectName: "figureArrows2D"
+            model: root.figureShapes.arrows
+            delegate: Arrow2D {
+                required property var modelData
+                visible: !modelData.isZero
+                opacity: modelData.role === "result" ? 1.0 : AppTheme.Theme.operandFigureOpacity
+                x1: modelData.x1
+                y1: modelData.y1
+                x2: modelData.x2
+                y2: modelData.y2
+                strokeColor: AppTheme.Theme.columnColor(modelData.column)
+                lineWidth: modelData.role === "result" ? AppTheme.Theme.selectedVectorLineWidth : AppTheme.Theme.vectorLineWidth
+                headLength: AppTheme.Theme.vectorHeadLength
+                headHalfWidth: AppTheme.Theme.vectorHeadHalfWidth
+            }
+        }
+
+        Repeater {
+            model: root.figureShapes.labels
+            delegate: Label {
+                required property var modelData
+                x: modelData.x + 6
+                y: modelData.y - height - 2
+                text: modelData.text
+                color: modelData.role === "result" ? AppTheme.Theme.resultColor : AppTheme.Theme.secondaryText
+                font.pixelSize: 16
+                font.bold: true
+            }
+        }
+    }
+
+    // 3×3 matrices live in space.
+    Rectangle {
+        objectName: "needs3DNotice"
+        visible: root.figureShapes.needs3D
+        anchors.centerIn: parent
+        width: needs3DRow.implicitWidth + 24
+        height: needs3DRow.implicitHeight + 16
+        radius: AppTheme.Theme.panelRadius
+        color: AppTheme.Theme.overlayBackground
+        border.color: AppTheme.Theme.borderColor
+        z: 5
+
+        RowLayout {
+            id: needs3DRow
+            anchors.centerIn: parent
+            spacing: AppTheme.Theme.spacingMedium
+
+            Label {
+                text: "3×3 matrices are drawn in space."
+                color: AppTheme.Theme.primaryText
+            }
+            Button {
+                objectName: "showIn3DButton"
+                text: "Show in 3D"
+                onClicked: app.workspace.setWorkspaceMode("3d")
             }
         }
     }
@@ -489,7 +581,8 @@ Rectangle {
         // î and ĵ after A(t), drawn last so the columns of the matrix stay visible.
         Repeater {
             objectName: "basisVectors2D"
-            model: root.visualState.show_basis_vectors ? root.basisVectors.length : 0
+            model: root.visualState.show_basis_vectors && app.transformation.showsTransformation
+                ? root.basisVectors.length : 0
 
             delegate: Item {
                 id: basisItem

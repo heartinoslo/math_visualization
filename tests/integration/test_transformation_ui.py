@@ -109,7 +109,7 @@ def test_invalid_entry_is_reported_and_reverts() -> None:
 
     assert shell.document.matrix == Matrix2.identity()
     assert shell.find("matrixEntryC").property("text") == "0"
-    assert "Matrix entry c" in shell.find("errorMessageLabel").property("text")
+    assert "Matrix entry a₂₁" in shell.find("errorMessageLabel").property("text")
 
 
 def test_play_runs_on_the_frame_clock_and_stops_at_the_end() -> None:

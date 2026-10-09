@@ -33,6 +33,7 @@ Rectangle {
         ToolButton {
             id: addButton
             property string tipText: ""
+            visible: text !== ""
             implicitHeight: AppTheme.Theme.compactControlHeight
             font.pixelSize: 12
             ToolTip.visible: hovered
@@ -189,10 +190,20 @@ Rectangle {
         // Matrices -----------------------------------------------------------
         SectionHeader {
             title: "MATRICES"
-            addText: "+ Matrix"
+            addText: "+ 2×2"
             addObjectName: "addMatrixButton"
-            addTip: "Add a matrix (the identity) and make it active"
+            addTip: "Add a 2×2 matrix (the identity) and make it active"
             onAddClicked: app.matrices.addMatrix()
+
+            ToolButton {
+                objectName: "addMatrix3Button"
+                text: "+ 3×3"
+                implicitHeight: AppTheme.Theme.compactControlHeight
+                font.pixelSize: 12
+                ToolTip.visible: hovered
+                ToolTip.text: "Add a 3×3 matrix (the identity), shown in the 3D view"
+                onClicked: app.matrices.addMatrixOfSize(3)
+            }
         }
 
         ListView {
@@ -212,6 +223,7 @@ Rectangle {
                 required property string name
                 required property string entriesText
                 required property bool active
+                required property int size
 
                 width: ListView.view.width
                 height: 30
@@ -226,9 +238,9 @@ Rectangle {
                     anchors.rightMargin: AppTheme.Theme.spacingSmall
                     spacing: AppTheme.Theme.spacingSmall
 
-                    // A small bracket glyph marks matrices.
+                    // A small bracket glyph marks matrices; 3×3 ones say so.
                     Label {
-                        text: "[ ]"
+                        text: matrixRow.size === 3 ? "[3]" : "[ ]"
                         color: AppTheme.Theme.transformedGridColor
                         font.pixelSize: 11
                         font.bold: true
@@ -276,6 +288,84 @@ Rectangle {
             actionsEnabled: app.matrices.activeId !== ""
             onDuplicateClicked: app.matrices.duplicateActive()
             onDeleteClicked: app.matrices.removeActive()
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: AppTheme.Theme.spacingSmall
+            Layout.bottomMargin: AppTheme.Theme.spacingSmall
+            height: 1
+            color: AppTheme.Theme.borderColor
+        }
+
+        // Operations ---------------------------------------------------------
+        SectionHeader {
+            title: "OPERATIONS"
+        }
+
+        ListView {
+            id: operationList
+            objectName: "operationList"
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(1, Math.min(count, 4)) * 32
+            clip: true
+            spacing: 2
+            model: app.operations.operationModel
+            boundsBehavior: Flickable.StopAtBounds
+
+            delegate: Rectangle {
+                id: operationRow
+                required property string objectId
+                required property string title
+                required property bool active
+
+                width: ListView.view.width
+                height: 30
+                radius: AppTheme.Theme.panelRadius
+                color: active ? AppTheme.Theme.surfaceLevelTwo
+                    : operationMouse.containsMouse ? Qt.rgba(0.5, 0.5, 0.5, 0.08) : "transparent"
+                border.color: active ? AppTheme.Theme.resultColor : "transparent"
+
+                Label {
+                    anchors.fill: parent
+                    anchors.leftMargin: AppTheme.Theme.spacingSmall
+                    anchors.rightMargin: AppTheme.Theme.spacingSmall
+                    verticalAlignment: Text.AlignVCenter
+                    text: operationRow.title
+                    color: AppTheme.Theme.primaryText
+                    font.pixelSize: 12
+                    font.bold: operationRow.active
+                    elide: Text.ElideRight
+                }
+
+                MouseArea {
+                    id: operationMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: app.operations.activate(operationRow.objectId)
+                }
+            }
+
+            Label {
+                objectName: "noOperationsHint"
+                anchors.fill: parent
+                visible: operationList.count === 0
+                text: "Compute one in the right panel."
+                color: AppTheme.Theme.secondaryText
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        Button {
+            objectName: "deleteOperationButton"
+            Layout.fillWidth: true
+            text: "Delete operation"
+            enabled: app.operations.hasFocus
+            implicitHeight: AppTheme.Theme.compactControlHeight
+            font.pixelSize: 11
+            onClicked: app.operations.removeActive()
         }
     }
 }

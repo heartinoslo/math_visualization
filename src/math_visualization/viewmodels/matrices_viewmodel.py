@@ -6,6 +6,7 @@ from PySide6.QtCore import QAbstractListModel, QByteArray, QModelIndex, QObject,
 
 from math_visualization.commands import (
     MATRIX_COMMANDS,
+    OPERATION_COMMANDS,
     AddMatrixCommand,
     Command,
     CommandManager,
@@ -13,15 +14,16 @@ from math_visualization.commands import (
     UpdateMatrixCommand,
 )
 from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
+from math_visualization.math_core.matrix_algebra import identity
 from math_visualization.scene.matrix_object import MatrixObject, new_object_id, next_matrix_name
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.formatting import format_number
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 
 
-def entries_text(matrix: Matrix2) -> str:
-    (a, b), (c, d) = matrix.rows
-    return f"[{format_number(a, 2)} {format_number(b, 2)}; {format_number(c, 2)} {format_number(d, 2)}]"
+def entries_text(matrix: Matrix2 | Matrix3) -> str:
+    return "[" + "; ".join(" ".join(format_number(value, 2) for value in row) for row in matrix.rows) + "]"
 
 
 class MatrixListModel(QAbstractListModel):
@@ -31,6 +33,7 @@ class MatrixListModel(QAbstractListModel):
     NameRole = Qt.UserRole + 2
     EntriesTextRole = Qt.UserRole + 3
     ActiveRole = Qt.UserRole + 4
+    SizeRole = Qt.UserRole + 5
 
     def __init__(self, document: SceneDocument, parent: QObject | None = None):
         super().__init__(parent)
@@ -51,6 +54,8 @@ class MatrixListModel(QAbstractListModel):
             return entries_text(matrix.matrix)
         if role == self.ActiveRole:
             return matrix.object_id == self._document.active_matrix_id
+        if role == self.SizeRole:
+            return matrix.size
         return None
 
     def roleNames(self) -> dict[int, QByteArray]:
@@ -59,6 +64,7 @@ class MatrixListModel(QAbstractListModel):
             self.NameRole: QByteArray(b"name"),
             self.EntriesTextRole: QByteArray(b"entriesText"),
             self.ActiveRole: QByteArray(b"active"),
+            self.SizeRole: QByteArray(b"size"),
         }
 
     def structure_changed(self) -> None:
@@ -97,7 +103,7 @@ class MatricesViewModel(QObject):
         commands.add_listener(self._on_command)
 
     def _on_command(self, command: Command) -> None:
-        if not isinstance(command, MATRIX_COMMANDS):
+        if not isinstance(command, MATRIX_COMMANDS + OPERATION_COMMANDS):
             return
         if isinstance(command, UpdateMatrixCommand):
             self._model.rows_changed()
@@ -136,15 +142,24 @@ class MatricesViewModel(QObject):
         if self._document.find_matrix(object_id) is None:
             self.errorOccurred.emit(f"Unknown matrix: {object_id!r}")
             return
-        if object_id != self._document.active_matrix_id:
+        if object_id != self._document.active_matrix_id or self._document.active_operation_id is not None:
+            # Choosing a matrix shows that matrix, not a computed operation.
             self._document.active_matrix_id = object_id
+            self._document.active_operation_id = None
             self._sync_active()
             self._transformation.active_matrix_changed()
 
     @Slot(result=str)
     def addMatrix(self) -> str:
-        """Add the next named matrix, the identity, and make it active."""
+        """Add the next named 2×2 matrix, the identity, and make it active."""
         return self._add(Matrix2.identity())
+
+    @Slot(int, result=str)
+    def addMatrixOfSize(self, size: int) -> str:
+        if size not in (2, 3):
+            self.errorOccurred.emit(f"Matrices can be 2×2 or 3×3, not {size}×{size}")
+            return ""
+        return self._add(identity(size))
 
     @Slot(result=str)
     def duplicateActive(self) -> str:
@@ -153,7 +168,7 @@ class MatricesViewModel(QObject):
             return ""
         return self._add(active.matrix, self._document.matrix_index(active.object_id) + 1)
 
-    def _add(self, value: Matrix2, index: int | None = None) -> str:
+    def _add(self, value: Matrix2 | Matrix3, index: int | None = None) -> str:
         created = MatrixObject(
             new_object_id(), next_matrix_name(matrix.name for matrix in self._document.matrices), value
         )

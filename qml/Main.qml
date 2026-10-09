@@ -2,6 +2,7 @@ import QtQml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import "components"
 import "pages"
 import "theme" as AppTheme
 
@@ -142,6 +143,11 @@ ApplicationWindow {
         }
     }
 
+    ExportDialog {
+        id: exportDialog
+        anchors.centerIn: parent
+    }
+
     FileDialog {
         id: openDialog
         objectName: "openDialog"
@@ -242,6 +248,15 @@ ApplicationWindow {
                 text: "Save &As…"
                 shortcut: StandardKey.SaveAs
                 onTriggered: root.saveAs("")
+            }
+
+            MenuSeparator {}
+
+            Action {
+                objectName: "exportVideoAction"
+                text: "&Export Video…"
+                shortcut: "Ctrl+E"
+                onTriggered: exportDialog.open()
             }
 
             MenuSeparator {}

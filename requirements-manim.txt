@@ -1,0 +1,5 @@
+# Separate environment for video export (see scripts/setup_manim_env.py).
+# Never install these into the application's own environment.
+manimgl==1.7.2
+# ManimGL 1.7.2 imports pkg_resources, which setuptools 81 removes.
+setuptools<81

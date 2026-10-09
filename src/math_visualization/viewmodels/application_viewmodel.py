@@ -6,9 +6,11 @@ from PySide6.QtCore import QObject, Property, Signal, Slot
 
 from math_visualization.commands import CommandManager
 from math_visualization.persistence import RecentProjects, RecoveryStore
+from math_visualization.persistence.settings_store import SettingsStore
 from math_visualization.infrastructure.logging_config import APPLICATION_LOGGER_NAME
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
+from math_visualization.viewmodels.export_viewmodel import ExportViewModel
 from math_visualization.viewmodels.inspector_viewmodel import InspectorViewModel
 from math_visualization.viewmodels.matrix_properties_viewmodel import MatrixPropertiesViewModel
 from math_visualization.viewmodels.project_viewmodel import ProjectViewModel
@@ -36,9 +38,12 @@ class ApplicationViewModel(QObject):
         document: SceneDocument,
         recent: RecentProjects | None = None,
         recovery: RecoveryStore | None = None,
+        settings: SettingsStore | None = None,
+        default_manim_python: str = "",
+        default_export_folder: str = "",
     ):
-        """``recent`` and ``recovery`` default to in-memory / disabled, so tests
-        never touch the user's settings; :func:`application.main` passes real ones."""
+        """``recent``, ``recovery`` and ``settings`` default to in-memory / disabled,
+        so tests never touch the user's settings; :func:`application.main` passes real ones."""
         super().__init__()
         self._document = document
         self._status_message = "Ready"
@@ -64,10 +69,20 @@ class ApplicationViewModel(QObject):
             document, self._commands, self.replace_document, recent, recovery, parent=self
         )
         self._project.statusMessage.connect(self._set_status_message)
+        self._exporter = ExportViewModel(
+            document,
+            lambda: (self._viewport_2d.viewport_size, self._viewport_3d.viewport_size),
+            settings,
+            default_manim_python,
+            default_export_folder,
+            parent=self,
+        )
+        self._exporter.statusMessage.connect(self._set_status_message)
         self._transformation.visualStateChanged.connect(self._project.refresh_dirty)
         self._animation.settingsChanged.connect(self._project.refresh_dirty)
         for child in (
             self._project,
+            self._exporter,
             self._workspace,
             self._animation,
             self._scene,
@@ -100,6 +115,10 @@ class ApplicationViewModel(QObject):
     @Property(QObject, constant=True)
     def project(self) -> ProjectViewModel:
         return self._project
+
+    @Property(QObject, constant=True)
+    def exporter(self) -> ExportViewModel:
+        return self._exporter
 
     @Property(QObject, constant=True)
     def workspace(self) -> WorkspaceViewModel:

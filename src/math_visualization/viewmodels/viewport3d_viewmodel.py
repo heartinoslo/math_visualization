@@ -126,6 +126,11 @@ class Viewport3DViewModel(QObject):
 
     # State ------------------------------------------------------------------
 
+    @property
+    def viewport_size(self) -> tuple[float, float]:
+        """Size of the canvas in pixels (0 × 0 until QML lays it out)."""
+        return (self._width, self._height)
+
     def viewport(self) -> Viewport3D:
         return Viewport3D(self._document.workspace_state_3d, self._width, self._height)
 

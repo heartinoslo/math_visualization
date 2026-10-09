@@ -252,3 +252,38 @@ def test_rendered_3d_arrow_matches_python_geometry() -> None:
         assert abs(actual.red() - expected.red()) < 40
         assert abs(actual.green() - expected.green()) < 40
         assert abs(actual.blue() - expected.blue()) < 40
+
+
+def test_rendered_3d_shaft_is_as_thin_as_the_2d_stroke() -> None:
+    """Measured across the drawn shaft, a 3D vector is about the 2D line width."""
+    shell = Shell()
+    interface = shell.window.rendererInterface()
+    if interface is None or not QSGRendererInterface.isApiRhiBased(interface.graphicsApi()):
+        pytest.skip("Qt Quick 3D needs an RHI-based graphics API")
+    identifier = shell.app.scene.addVector()
+    shell.app.scene.setComponents(identifier, 3.0, 1.2)
+    shell.app.scene.clearSelection()
+    shell.app.workspace.setWorkspaceMode("3d")
+    shell.app.viewport3D.applyPreset("top")
+    for _ in range(10):
+        shell.process()
+
+    image = QQuickWindow.grabWindow(shell.window)
+    ratio = image.width() / shell.window.width()
+    canvas = shell.window.findChild(QQuickItem, "workspace3D")
+    # Sampled away from the axes and grid lines; the column crosses the shaft
+    # at a slope of 0.4, which widens it by only sqrt(1 + 0.4²) ≈ 1.08.
+    point = shell.app.viewport3D.viewport().project((1.35, 0.54, 0.0))
+    centre = canvas.mapToScene(QPointF(point.x, point.y))
+    expected = QColor(shell.document.vectors[0].color)
+
+    def coverage(dy: int) -> float:
+        """How far the pixel dy rows from the centre is blended towards the vector colour."""
+        actual = image.pixelColor(round(centre.x() * ratio), round(centre.y() * ratio) + dy)
+        background = image.pixelColor(round(centre.x() * ratio), round(centre.y() * ratio) - 10)
+        span = sum(abs(e - b) for e, b in zip(expected.getRgb()[:3], background.getRgb()[:3]))
+        moved = sum(abs(a - b) for a, b in zip(actual.getRgb()[:3], background.getRgb()[:3]))
+        return min(1.0, moved / span)
+
+    width = sum(coverage(dy) for dy in range(-7, 8)) / ratio
+    assert 1.5 <= width <= 4.5

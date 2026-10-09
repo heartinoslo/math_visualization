@@ -276,6 +276,20 @@ class Viewport3D:
             True,
         )
 
+    def units_per_pixel(self, point: Vector3) -> float:
+        """Mathematical length covered by one screen pixel at ``point``.
+
+        Orthographic views are uniform; in perspective the footprint grows with
+        the depth along the view direction (clamped to the near plane).
+        """
+        if self.height <= 0.0:
+            return 0.0
+        units = self.visible_height / self.height
+        if self.camera.projection_mode is ProjectionMode.PERSPECTIVE:
+            depth = _dot(_add(point, _scale(self.eye, -1.0)), self.forward)
+            units *= max(depth, self.clip_near / SCENE_UNITS_PER_MATH_UNIT) / self.distance
+        return units
+
     def ray(self, screen_x: float, screen_y: float) -> tuple[Vector3, Vector3]:
         """Return the origin and unit direction of the ray through a screen point."""
         ndc_x = 2.0 * screen_x / self.width - 1.0 if self.width > 0.0 else 0.0

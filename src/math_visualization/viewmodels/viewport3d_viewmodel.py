@@ -37,10 +37,12 @@ from math_visualization.viewport.transformation_geometry import (
 AXIS_RADIUS_PER_DISTANCE = 0.0022
 # Tick labels closer than this on screen are dropped so they never overlap.
 MIN_TICK_LABEL_SPACING_PX = 28.0
-# Vector arrows, relative to the camera distance so they keep their screen size.
-VECTOR_RADIUS_PER_DISTANCE = 0.0040
-SELECTED_VECTOR_RADIUS_PER_DISTANCE = 0.0058
-VECTOR_HEAD_LENGTH_PER_DISTANCE = 0.03
+# Vector arrows in screen pixels, matching the 2D canvas (Theme.qml). Each arrow
+# converts them to scene units at its own depth, so it looks the same in 2D and 3D.
+VECTOR_LINE_WIDTH_PX = 2.5
+SELECTED_VECTOR_LINE_WIDTH_PX = 3.5
+VECTOR_HEAD_LENGTH_PX = 13.0
+VECTOR_HEAD_HALF_WIDTH_PX = 5.5
 # Short arrows (î, ĵ, small vectors) keep most of their length as shaft.
 MAX_HEAD_FRACTION = 0.3
 TIP_HIT_RADIUS_PX = 14.0
@@ -406,14 +408,19 @@ class Viewport3DViewModel(QObject):
     def _arrow(self, value: Vector2, selected: bool = False) -> dict:
         """Scene transform of an arrow from the origin to ``value`` embedded as (x, y, 0).
 
-        The node points its local +Y along the vector; shaft and head are sized
-        from the camera distance so they keep a steady on-screen thickness, and
-        short vectors shrink their head instead of overshooting.
+        The node points its local +Y along the vector. Shaft and head are sized
+        in screen pixels like the 2D arrows: the shaft at the depth of its
+        midpoint, the head at the depth of the tip. Short vectors shrink their
+        head instead of overshooting.
         """
-        distance = self.viewport().distance
-        radius = distance * (SELECTED_VECTOR_RADIUS_PER_DISTANCE if selected else VECTOR_RADIUS_PER_DISTANCE)
+        view = self.viewport()
+        width = SELECTED_VECTOR_LINE_WIDTH_PX if selected else VECTOR_LINE_WIDTH_PX
+        radius = width / 2.0 * view.units_per_pixel((value.x / 2.0, value.y / 2.0, 0.0))
+        tip_units = view.units_per_pixel((value.x, value.y, 0.0))
         length = value.length
-        head = min(distance * VECTOR_HEAD_LENGTH_PER_DISTANCE, MAX_HEAD_FRACTION * length)
+        head = min(VECTOR_HEAD_LENGTH_PX * tip_units, MAX_HEAD_FRACTION * length)
+        # A shortened head keeps the 2D head's proportions but never gets narrower than the shaft.
+        head_radius = max(radius * 1.5, head * VECTOR_HEAD_HALF_WIDTH_PX / VECTOR_HEAD_LENGTH_PX)
         if value.is_zero():
             rotation = QQuaternion()
         else:
@@ -426,7 +433,7 @@ class Viewport3DViewModel(QObject):
             "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
             "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
             "radius": radius * SCENE_UNITS_PER_MATH_UNIT,
-            "headRadius": max(radius * 2.2, head * 0.22) * SCENE_UNITS_PER_MATH_UNIT,
+            "headRadius": head_radius * SCENE_UNITS_PER_MATH_UNIT,
         }
 
     @Property("QVariantList", notify=vectorSceneChanged)

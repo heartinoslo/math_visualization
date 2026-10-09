@@ -111,6 +111,31 @@ def test_3d_short_vectors_shrink_their_head_and_zero_vectors_are_flagged() -> No
     assert zero["isZero"] and not short["isZero"]
 
 
+def screen_width(view, point, scene_size) -> float:
+    """On-screen length of ``scene_size`` scene units laid across the view at ``point``."""
+    size = scene_size / SCENE_UNITS_PER_MATH_UNIT
+    shifted = tuple(p + size * r for p, r in zip(point, view.right))
+    a, b = view.project(point), view.project(shifted)
+    return math.hypot(b.x - a.x, b.y - a.y)
+
+
+@pytest.mark.parametrize("wheel", [0.0, 600.0, -600.0])
+@pytest.mark.parametrize("projection", ["perspective", "orthographic"])
+def test_3d_arrows_match_the_2d_stroke_in_pixels_at_any_zoom(wheel, projection) -> None:
+    _, view_model, ids = make_app([(2.0, 1.0), (-6.0, 7.0)])
+    viewport = view_model.viewport3D
+    if projection == "orthographic":
+        viewport.toggleProjectionMode()
+    viewport.zoomBy(wheel)
+    view_model.scene.select(ids[0])
+    view = viewport.viewport()
+
+    for arrow, (x, y), width in zip(viewport.vectorArrows, [(2.0, 1.0), (-6.0, 7.0)], [3.5, 2.5]):
+        assert screen_width(view, (x / 2, y / 2, 0.0), 2 * arrow["radius"]) == pytest.approx(width, rel=1e-6)
+        assert screen_width(view, (x, y, 0.0), arrow["headLength"]) == pytest.approx(13.0, rel=1e-6)
+        assert screen_width(view, (x, y, 0.0), arrow["headRadius"]) == pytest.approx(5.5, rel=1e-6)
+
+
 def test_3d_labels_and_component_lines_follow_the_selection() -> None:
     _, view_model, ids = make_app([(2.0, 1.0), (-1.0, 3.0)])
     viewport = view_model.viewport3D

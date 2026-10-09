@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
-from math_visualization.commands import Command, CommandManager, SetMatrixCommand
+from math_visualization.commands import MATRIX_COMMANDS, Command, CommandManager, UpdateMatrixCommand
 from math_visualization.math_core.matrix2 import Matrix2
 from math_visualization.math_core.transformations import (
     MATRIX_PRESETS,
@@ -14,6 +14,7 @@ from math_visualization.math_core.transformations import (
     ease,
     interpolate_from_identity,
 )
+from math_visualization.scene.matrix_object import MatrixObject
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.visual_state import VISUAL_FLAGS
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
@@ -97,11 +98,25 @@ class TransformationViewModel(QObject):
         self.expressionChanged.emit()
 
     def _on_command(self, command: Command) -> None:
-        if isinstance(command, SetMatrixCommand):
-            self.matrixChanged.emit()
-            self._refresh_current()
+        if isinstance(command, MATRIX_COMMANDS):
+            self.active_matrix_changed()
+
+    def active_matrix_changed(self) -> None:
+        """The active matrix, or its value, changed: republish it and A(t)."""
+        self.matrixChanged.emit()
+        self._refresh_current()
 
     # Matrix editing ------------------------------------------------------------------
+
+    @Property(bool, notify=matrixChanged)
+    def hasMatrix(self) -> bool:
+        return self._document.active_matrix is not None
+
+    @Property(str, notify=matrixChanged)
+    def matrixName(self) -> str:
+        """Name of the active matrix ("A" when there is none, for the formulas)."""
+        active = self._document.active_matrix
+        return active.name if active is not None else "A"
 
     @Property("QStringList", notify=matrixChanged)
     def entryTexts(self) -> list[str]:
@@ -133,9 +148,13 @@ class TransformationViewModel(QObject):
         return self.set_matrix(preset.matrix)
 
     def set_matrix(self, matrix: Matrix2) -> bool:
-        """Replace the target matrix through an undoable command."""
-        if matrix != self._document.matrix:
-            self._commands.execute(SetMatrixCommand(self._document.matrix, matrix))
+        """Replace the active matrix's entries through an undoable command."""
+        active = self._document.active_matrix
+        if active is None:
+            self.errorOccurred.emit("There is no matrix to edit; add one first")
+            return False
+        if matrix != active.matrix:
+            self._commands.execute(UpdateMatrixCommand(active, MatrixObject(active.object_id, active.name, matrix)))
         return True
 
     # Visibility of the transformation layers ---------------------------------------------
@@ -159,7 +178,7 @@ class TransformationViewModel(QObject):
 
     @Property(str, notify=matrixChanged)
     def targetText(self) -> str:
-        return "A = " + format_matrix(self._document.matrix)
+        return f"{self.matrixName} = " + format_matrix(self._document.matrix)
 
     @Property(str, notify=expressionChanged)
     def parameterText(self) -> str:
@@ -168,7 +187,8 @@ class TransformationViewModel(QObject):
 
     @Property(str, notify=expressionChanged)
     def currentText(self) -> str:
-        return "A(t) = (1 − t)·I + t·A = " + format_matrix(self._current)
+        name = self.matrixName
+        return f"{name}(t) = (1 − t)·I + t·{name} = " + format_matrix(self._current)
 
     @Property(str, notify=expressionChanged)
     def selectedMappingText(self) -> str:
@@ -176,8 +196,9 @@ class TransformationViewModel(QObject):
         if selected is None:
             return ""
         image = self._current @ selected.vector
+        name = self.matrixName
         return (
-            f"A(t)·{selected.name} = A(t)·({format_number(selected.vector.x, 2)}, "
+            f"{name}(t)·{selected.name} = {name}(t)·({format_number(selected.vector.x, 2)}, "
             f"{format_number(selected.vector.y, 2)}) = ({format_number(image.x, 2)}, "
             f"{format_number(image.y, 2)})"
         )

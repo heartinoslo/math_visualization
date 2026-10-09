@@ -137,9 +137,9 @@ def test_undo_and_redo_texts_name_the_edit() -> None:
 
     app.scene.addVector()
     app.transformation.applyPreset("rotation")
-    assert project.undoText == "Undo Edit matrix"
+    assert project.undoText == "Undo Edit A"
     assert project.undo()
-    assert project.undoText == "Undo Add u" and project.redoText == "Redo Edit matrix"
+    assert project.undoText == "Undo Add u" and project.redoText == "Redo Edit A"
     assert project.redo()
     assert app.document.matrix == Matrix2(0, -1, 1, 0)
 

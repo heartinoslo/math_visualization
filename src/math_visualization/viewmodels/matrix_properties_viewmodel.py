@@ -52,6 +52,11 @@ class MatrixPropertiesViewModel(QObject):
         transformation.matrixChanged.connect(self._on_matrix_changed)
         transformation.currentMatrixChanged.connect(self.currentChanged)
 
+    @property
+    def _name(self) -> str:
+        active = self._document.active_matrix
+        return active.name if active is not None else "A"
+
     def analysis(self) -> MatrixAnalysis:
         return self._analysis
 
@@ -107,11 +112,11 @@ class MatrixPropertiesViewModel(QObject):
         """One sentence explaining the status, shown under the badge."""
         analysis = self._analysis
         if analysis.status is MatrixStatus.REGULAR:
-            return "Every output comes from exactly one input; A⁻¹ undoes A."
+            return f"Every output comes from exactly one input; {self._name}⁻¹ undoes {self._name}."
         if analysis.status is MatrixStatus.NEAR_SINGULAR:
             return (
                 f"Invertible, but the plane is squashed almost flat (κ ≈ "
-                f"{format_quantity(analysis.condition_number, 3)}). A⁻¹ amplifies small "
+                f"{format_quantity(analysis.condition_number, 3)}). {self._name}⁻¹ amplifies small "
                 "errors enormously."
             )
         if analysis.rank == 1:
@@ -127,7 +132,7 @@ class MatrixPropertiesViewModel(QObject):
     def determinantFormula(self) -> str:
         a, b, c, d = self._document.matrix.entries
         return (
-            f"det A = ad − bc = {_factor(a)}·{_factor(d)} − {_factor(b)}·{_factor(c)} = "
+            f"det {self._name} = ad − bc = {_factor(a)}·{_factor(d)} − {_factor(b)}·{_factor(c)} = "
             f"{format_quantity(self._analysis.determinant)}"
         )
 
@@ -135,7 +140,7 @@ class MatrixPropertiesViewModel(QObject):
     def rankFormula(self) -> str:
         analysis = self._analysis
         verdict = "invertible" if analysis.is_invertible else "not invertible"
-        return f"rank A = {analysis.rank}  ({verdict}; σ_min/σ_max = {self._ratio_text()})"
+        return f"rank {self._name} = {analysis.rank}  ({verdict}; σ_min/σ_max = {self._ratio_text()})"
 
     def _ratio_text(self) -> str:
         largest, smallest = self._analysis.singular_values

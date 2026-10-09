@@ -6,7 +6,7 @@ import os
 import pytest
 from PySide6.QtCore import QSettings
 
-from math_visualization.commands import AddVectorCommand, CommandManager, SetMatrixCommand, UpdateVectorCommand
+from math_visualization.commands import AddVectorCommand, CommandManager, UpdateMatrixCommand, UpdateVectorCommand
 from math_visualization.math_core import Matrix2, Vector2
 from math_visualization.persistence import project_file
 from math_visualization.persistence.project_file import (
@@ -23,6 +23,7 @@ from math_visualization.persistence.recent_projects import (
 )
 from math_visualization.persistence.recovery import RecoveryStore
 from math_visualization.scene.animation_state import AnimationState
+from math_visualization.scene.matrix_object import MatrixObject
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.vector_object import VectorObject
 from math_visualization.scene.visual_state import VisualState
@@ -45,8 +46,9 @@ def full_document() -> SceneDocument:
         animation_state=AnimationState(progress=0.4, rate_function="linear", playback_speed=2.0),
         vectors=vectors,
         selected_object_id="b2",
-        matrix=Matrix2(1.0, 1.0, 0.0, 1.0),
         visual_state=VisualState(show_ghosts=False, show_kernel=False),
+        matrices=[MatrixObject("m1", "A", Matrix2(1.0, 1.0, 0.0, 1.0)), MatrixObject("m2", "B", Matrix2(0, -1, 1, 0))],
+        active_matrix_id="m2",
     )
 
 
@@ -71,7 +73,7 @@ def test_save_and_reopen_restores_everything(tmp_path) -> None:
 
     assert reopened == document
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["format"] == FILE_FORMAT and data["schema_version"] == 1
+    assert data["format"] == FILE_FORMAT and data["schema_version"] == 2
 
 
 def test_failed_write_keeps_the_previous_file_and_leaves_no_temporary(tmp_path, monkeypatch) -> None:
@@ -120,7 +122,10 @@ def test_corrupt_or_foreign_content(tmp_path, content, message) -> None:
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        (lambda d: d.update(matrix=[[1, 2, 3], [4, 5, 6]]), "matrix must be 2x2"),
+        (lambda d: d["matrices"][0].update(entries=[[1, 2, 3], [4, 5, 6]]), "matrix must be 2x2"),
+        (lambda d: d["matrices"][0].update(size=3), "unsupported matrix size"),
+        (lambda d: d.update(active_matrix_id="nope"), "active_matrix_id"),
+        (lambda d: d["matrices"][1].update(id=d["matrices"][0]["id"]), "matrix ids must be unique"),
         (lambda d: d["vectors"][0].update(components=["1", 2]), "expected a number"),
         (lambda d: d.pop("vectors"), "vectors"),
         (lambda d: d.update(selected_object_id="ghost"), "selected_object_id"),
@@ -192,6 +197,7 @@ def test_older_schemas_are_migrated_step_by_step(tmp_path, monkeypatch) -> None:
 
 def test_missing_migration_is_a_clear_refusal(monkeypatch) -> None:
     monkeypatch.setattr(project_file, "CURRENT_SCHEMA_VERSION", 2)
+    monkeypatch.setattr(project_file, "MIGRATIONS", {})
     with pytest.raises(ProjectFileError, match="format 1, which can no longer be opened"):
         upgrade({"schema_version": 1})
 
@@ -267,7 +273,8 @@ def test_history_is_clean_exactly_at_the_saved_point() -> None:
     commands.mark_clean()
     assert commands.is_clean
 
-    commands.execute(SetMatrixCommand(document.matrix, Matrix2(2, 0, 0, 2)))
+    active = document.active_matrix
+    commands.execute(UpdateMatrixCommand(active, MatrixObject(active.object_id, "A", Matrix2(2, 0, 0, 2))))
     assert not commands.is_clean
     commands.undo()
     assert commands.is_clean
@@ -321,3 +328,55 @@ def test_history_labels_name_the_edit() -> None:
     assert commands.undo_label == "Rename u"
     commands.undo()
     assert commands.redo_label == "Rename u" and commands.undo_label == "Add u"
+
+
+# Schema 1 → 2: one matrix becomes the named matrix "A" ------------------------------------
+
+
+def version_1_data(tmp_path) -> dict:
+    """A Stage 7 (schema 1) file: the same keys, but one plain ``matrix``."""
+    data = valid_data(tmp_path)
+    data.pop("matrices")
+    data.pop("active_matrix_id")
+    data["schema_version"] = 1
+    data["matrix"] = [[2.0, 0.0], [0.0, 0.5]]
+    return data
+
+
+def test_version_1_files_open_with_their_matrix_as_a(tmp_path) -> None:
+    path = tmp_path / "old.mvscene"
+    write_raw(path, version_1_data(tmp_path))
+
+    document = read_project(path)
+
+    assert [matrix.name for matrix in document.matrices] == ["A"]
+    assert document.active_matrix_id == document.matrices[0].object_id
+    assert document.matrix == Matrix2(2.0, 0.0, 0.0, 0.5)
+    assert [vector.name for vector in document.vectors] == ["u", "v"]
+    # Saving writes the current format.
+    write_project(document, path)
+    assert json.loads(path.read_text(encoding="utf-8"))["schema_version"] == 2
+
+
+def test_version_1_file_without_matrix_is_damaged(tmp_path) -> None:
+    data = version_1_data(tmp_path)
+    data.pop("matrix")
+    path = tmp_path / "old.mvscene"
+    write_raw(path, data)
+    with pytest.raises(ProjectFileError, match="old.mvscene is damaged: matrix is missing"):
+        read_project(path)
+
+
+def test_recovery_snapshot_from_version_1_is_upgraded(tmp_path) -> None:
+    data = version_1_data(tmp_path)
+    data["recovery"] = {"original_path": None, "saved_at": "2026-10-01T10:00:00"}
+    write_raw(tmp_path / "recovery.mvscene", data)
+
+    assert RecoveryStore(tmp_path).read().document.matrix == Matrix2(2.0, 0.0, 0.0, 0.5)
+
+
+def test_documents_without_matrices_round_trip(tmp_path) -> None:
+    document = SceneDocument(matrices=[])
+    assert document.active_matrix_id is None and document.matrix == Matrix2.identity()
+    write_project(document, tmp_path / "empty.mvscene")
+    assert read_project(tmp_path / "empty.mvscene") == document

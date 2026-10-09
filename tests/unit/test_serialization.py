@@ -52,7 +52,7 @@ def mutate(change):
 @pytest.mark.parametrize(
     "change",
     [
-        lambda d: d.update(schema_version=2),
+        lambda d: d.update(schema_version=99),
         lambda d: d.pop("vectors"),
         lambda d: d["vectors"][0].update(components=[1.0]),
         lambda d: d["vectors"][0].update(components=[1.0, "2"]),

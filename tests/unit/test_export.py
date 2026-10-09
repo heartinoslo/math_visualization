@@ -31,11 +31,11 @@ from math_visualization.viewport.viewport_3d import Viewport3D
 
 def document(**changes) -> SceneDocument:
     base = SceneDocument(
-        matrix=Matrix2(1, 1, 0, 1),
         vectors=[VectorObject("a", "u", "#FF862F", Vector2(2, 1)), VectorObject("b", "v", "#D147BD", Vector2(-1, 0.5))],
         animation_state=AnimationState(duration=3.0, rate_function="linear"),
         visual_state=VisualState(show_unit_square=False),
     )
+    base.matrix = Matrix2(1, 1, 0, 1)
     for key, value in changes.items():
         setattr(base, key, value)
     return base
@@ -190,3 +190,12 @@ def test_spec_numbers_are_plain_json() -> None:
     assert json.loads(json.dumps(spec, allow_nan=False)) == spec
     assert all(isinstance(value, float) for row in spec["matrix"] for value in row)
     assert np.isfinite(spec["camera_3d"]["height"])
+
+
+def test_export_uses_the_active_matrix() -> None:
+    from math_visualization.scene.matrix_object import MatrixObject
+
+    doc = document()
+    doc.matrices = [MatrixObject("a", "A", Matrix2(1, 1, 0, 1)), MatrixObject("b", "B", Matrix2(0, -1, 1, 0))]
+    doc.active_matrix_id = "b"
+    assert build_scene_spec(doc)["matrix"] == [[0.0, -1.0], [1.0, 0.0]]

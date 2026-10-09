@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from math_visualization.math_core.tolerances import ABSOLUTE_TOLERANCE
+from math_visualization.math_core.tolerances import ABSOLUTE_TOLERANCE, SINGULAR_RATIO
 from math_visualization.math_core.vector2 import Vector2
 
 
@@ -60,18 +60,35 @@ class Matrix2:
     def frobenius_norm(self) -> float:
         return math.sqrt(self.a**2 + self.b**2 + self.c**2 + self.d**2)
 
-    def rank(self, tolerance: float = ABSOLUTE_TOLERANCE) -> int:
+    @property
+    def singular_values(self) -> tuple[float, float]:
+        """``(σ_max, σ_min)``, computed without catastrophic cancellation.
+
+        σ_max² = (‖A‖² + √D) / 2 with D = ‖A‖⁴ − 4·det². D is evaluated as the
+        product ((a−d)² + (b+c)²)·((a+d)² + (b−c)²), which equals it exactly
+        but never subtracts nearly equal numbers; σ_min then follows as
+        |det| / σ_max.
+        """
+        a, b, c, d = self.entries
+        frobenius_squared = a * a + b * b + c * c + d * d
+        discriminant = ((a - d) ** 2 + (b + c) ** 2) * ((a + d) ** 2 + (b - c) ** 2)
+        largest = math.sqrt((frobenius_squared + math.sqrt(discriminant)) / 2.0)
+        if largest == 0.0:
+            return (0.0, 0.0)
+        return (largest, min(largest, abs(self.determinant) / largest))
+
+    def rank(self, tolerance: float = ABSOLUTE_TOLERANCE, ratio: float = SINGULAR_RATIO) -> int:
         """Rank with a scale-invariant singularity test.
 
-        ``|det| / ‖A‖²`` does not change when the matrix is scaled, so a tiny
+        σ_min / σ_max does not change when the matrix is scaled, so a tiny
         invertible matrix (1e-6·I) and a huge near-singular one are both
         classified by shape rather than by size. Only the all-zero test is
         absolute.
         """
-        scale = self.frobenius_norm
-        if scale <= tolerance:
+        largest, smallest = self.singular_values
+        if largest <= tolerance:
             return 0
-        if abs(self.determinant) <= tolerance * scale * scale:
+        if smallest <= ratio * largest:
             return 1
         return 2
 

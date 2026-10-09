@@ -231,10 +231,11 @@ def test_rendered_2d_basis_and_unit_square_follow_the_matrix() -> None:
     def screen(x, y):
         return origin[0] + x * 80.0, origin[1] - y * 80.0
 
-    # ĵ = A·e₂ = (1, 1) is red; the sheared square covers (1.2, 0.5) in yellow.
+    # ĵ = A·e₂ = (1, 1) is red; the sheared square covers (1.7, 0.9) in yellow
+    # (clear of the det label at its centre, A·(0.5, 0.5) = (1, 0.5)).
     assert close_to(shell.rendered_pixel("workspace2D", *screen(0.5, 0.5)), "#FC6255")
     assert close_to(shell.rendered_pixel("workspace2D", *screen(0.55, 0.0)), "#83C167")
-    square = shell.rendered_pixel("workspace2D", *screen(1.25, 0.6))
+    square = shell.rendered_pixel("workspace2D", *screen(1.7, 0.9))
     assert square.red() > 70 and square.green() > 70 and square.blue() < square.red() - 30
 
 

@@ -110,7 +110,7 @@ class TransformationViewModel(QObject):
             return False
         entries = list(self._document.matrix.entries)
         entries[index] = value
-        return self._set_matrix(Matrix2(*entries))
+        return self.set_matrix(Matrix2(*entries))
 
     @Property("QVariantList", constant=True)
     def presets(self) -> list[dict]:
@@ -122,9 +122,10 @@ class TransformationViewModel(QObject):
         if preset is None:
             self.errorOccurred.emit(f"Unknown matrix preset: {key!r}")
             return False
-        return self._set_matrix(preset.matrix)
+        return self.set_matrix(preset.matrix)
 
-    def _set_matrix(self, matrix: Matrix2) -> bool:
+    def set_matrix(self, matrix: Matrix2) -> bool:
+        """Replace the target matrix through an undoable command."""
         if matrix != self._document.matrix:
             self._commands.execute(SetMatrixCommand(self._document.matrix, matrix))
         return True

@@ -33,6 +33,14 @@ QtObject {
     readonly property color jHatColor: darkMode ? "#FC6255" : "#CF5044"
     readonly property color unitSquareColor: darkMode ? "#FFFF00" : "#E0B000"
     readonly property real unitSquareOpacity: darkMode ? 0.3 : 0.35
+    // Stage 6 feedback: a flipped square (det < 0) in manim's RED_B, the line the
+    // plane collapses onto in the square's yellow, the kernel in PURPLE_B.
+    readonly property color flippedSquareColor: darkMode ? "#FF8080" : "#D9534F"
+    readonly property color imageLineColor: unitSquareColor
+    readonly property color kernelColor: darkMode ? "#B189C6" : "#7E57A0"
+    readonly property color orientationArcColor: primaryText
+    readonly property color warningColor: darkMode ? "#F0AC5F" : "#B26A00"
+    readonly property color successColor: darkMode ? "#83C167" : "#4E8A3A"
     readonly property real ghostOpacity: 0.35
     readonly property real activePlaneOpacity: 0.07
     readonly property real auxiliaryPlaneOpacity: 0.45

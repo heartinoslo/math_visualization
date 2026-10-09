@@ -77,6 +77,16 @@ Rectangle {
             }
 
             FormulaLabel {
+                objectName: "determinantFormulaText"
+                text: app.matrixProperties.determinantFormula
+            }
+
+            FormulaLabel {
+                objectName: "rankFormulaText"
+                text: app.matrixProperties.rankFormula
+            }
+
+            FormulaLabel {
                 objectName: "selectedMappingText"
                 visible: text !== ""
                 text: app.transformation.selectedMappingText

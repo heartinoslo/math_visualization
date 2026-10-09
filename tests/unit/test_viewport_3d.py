@@ -193,3 +193,25 @@ def test_plane_segments_lie_in_their_plane_and_skip_major_lines() -> None:
     # Minor lines at 0.5 intervals, excluding multiples of 1.0 (majors) and 0 (axes).
     assert sorted({start[0] for start, end in minor if start[0] == end[0]}) == [-1.5, -0.5, 0.5, 1.5]
     assert len(major) == 8
+
+
+@pytest.mark.parametrize("projection", list(ProjectionMode))
+@pytest.mark.parametrize("point", [(0.0, 0.0, 0.0), (4.0, -3.0, 0.0), (-6.0, 5.0, 2.0)])
+def test_units_per_pixel_spans_one_pixel_at_the_point(projection, point) -> None:
+    view = viewport(projection_mode=projection)
+    units = view.units_per_pixel(point)
+    shifted = tuple(p + units * r for p, r in zip(point, view.right))
+
+    a, b = view.project(point), view.project(shifted)
+
+    assert math.hypot(b.x - a.x, b.y - a.y) == pytest.approx(1.0, rel=1e-6)
+
+
+def test_units_per_pixel_grows_with_depth_only_in_perspective() -> None:
+    near, far = (0.0, 0.0, 0.0), (8.0, 8.0, 0.0)
+    perspective = viewport(projection_mode=ProjectionMode.PERSPECTIVE)
+    orthographic = viewport(projection_mode=ProjectionMode.ORTHOGRAPHIC)
+
+    assert perspective.units_per_pixel(far) > perspective.units_per_pixel(near)
+    assert orthographic.units_per_pixel(far) == orthographic.units_per_pixel(near)
+    assert perspective.units_per_pixel(near) == pytest.approx(perspective.visible_height / 600.0)

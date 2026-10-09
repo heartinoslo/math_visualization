@@ -9,6 +9,7 @@ from math_visualization.infrastructure.logging_config import APPLICATION_LOGGER_
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
 from math_visualization.viewmodels.inspector_viewmodel import InspectorViewModel
+from math_visualization.viewmodels.matrix_properties_viewmodel import MatrixPropertiesViewModel
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 from math_visualization.viewmodels.viewport2d_viewmodel import Viewport2DViewModel
@@ -43,6 +44,7 @@ class ApplicationViewModel(QObject):
         self._transformation = TransformationViewModel(
             document, self._commands, self._animation, self._scene, parent=self
         )
+        self._matrix_properties = MatrixPropertiesViewModel(document, self._transformation, parent=self)
         self._viewport_2d = Viewport2DViewModel(
             document, self._workspace, self._scene, self._transformation, parent=self
         )
@@ -55,6 +57,7 @@ class ApplicationViewModel(QObject):
             self._scene,
             self._inspector,
             self._transformation,
+            self._matrix_properties,
             self._viewport_3d,
         ):
             child.errorOccurred.connect(self.reportError)
@@ -83,6 +86,10 @@ class ApplicationViewModel(QObject):
     @Property(QObject, constant=True)
     def transformation(self) -> TransformationViewModel:
         return self._transformation
+
+    @Property(QObject, constant=True)
+    def matrixProperties(self) -> MatrixPropertiesViewModel:
+        return self._matrix_properties
 
     @Property(QObject, constant=True)
     def viewport2D(self) -> Viewport2DViewModel:

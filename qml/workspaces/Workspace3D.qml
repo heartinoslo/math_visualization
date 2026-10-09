@@ -22,6 +22,8 @@ Rectangle {
     readonly property var basisArrows: viewport.basisArrows
     readonly property var visualState: app.transformation.visualState
     readonly property var vectorLabels: viewport.vectorLabels
+    readonly property var determinantOverlay: viewport.determinantOverlay
+    readonly property bool squareFlipped: visualState.show_flip_tint && determinantOverlay.flipped
 
     function updateViewportSize() {
         viewport.setViewportSize(width, height)
@@ -218,7 +220,9 @@ Rectangle {
             visible: root.visualState.show_unit_square
             geometry: TriangleGeometry { vertices: root.viewport.unitSquareVertices }
             opacity: AppTheme.Theme.unitSquareOpacity
-            materials: FlatMaterial { baseColor: AppTheme.Theme.unitSquareColor }
+            materials: FlatMaterial {
+                baseColor: root.squareFlipped ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.unitSquareColor
+            }
         }
 
         Model {
@@ -233,6 +237,43 @@ Rectangle {
             visible: root.visualState.show_transformed_grid
             geometry: LineSetGeometry { vertices: root.viewport.transformedAxisVertices }
             materials: FlatMaterial { baseColor: AppTheme.Theme.transformedAxisColor }
+        }
+
+        // Rank and orientation feedback, flat strips just above the plane (see
+        // the 2D canvas): kernel of A, the line A(t) collapses onto, and the
+        // turn from î to ĵ.
+        Model {
+            objectName: "kernelLine3D"
+            visible: root.determinantOverlay.kernelVertices.length > 0
+            geometry: TriangleGeometry { vertices: root.determinantOverlay.kernelVertices }
+            materials: FlatMaterial { baseColor: AppTheme.Theme.kernelColor }
+        }
+
+        Model {
+            objectName: "imageLine3D"
+            visible: root.determinantOverlay.imageLineVertices.length > 0
+            geometry: TriangleGeometry { vertices: root.determinantOverlay.imageLineVertices }
+            materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
+        }
+
+        Model {
+            objectName: "collapsedOrigin3D"
+            visible: root.determinantOverlay.collapsedToOrigin
+            source: "#Sphere"
+            scale: Qt.vector3d(root.viewport.axisRadius * 5 / 50,
+                               root.viewport.axisRadius * 5 / 50,
+                               root.viewport.axisRadius * 5 / 50)
+            materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
+        }
+
+        Model {
+            objectName: "orientationArc3D"
+            visible: root.determinantOverlay.arcVertices.length > 0
+            geometry: TriangleGeometry { vertices: root.determinantOverlay.arcVertices }
+            materials: FlatMaterial {
+                baseColor: root.determinantOverlay.flipped
+                    ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.orientationArcColor
+            }
         }
 
         // Faint input vectors while transformed; their tips are the drag handles.
@@ -306,6 +347,22 @@ Rectangle {
     Item {
         objectName: "vectorLabelLayer3D"
         anchors.fill: parent
+
+        // det A(t) at the centre of the unit square. It is drawn over the
+        // whole 3D scene, so it uses outlined text rather than a box that would
+        // hide the vectors behind it.
+        Label {
+            objectName: "determinantLabel3D"
+            visible: root.visualState.show_unit_square && root.determinantOverlay.labelVisible
+            text: app.matrixProperties.currentDeterminantText
+            x: root.determinantOverlay.labelX - width / 2
+            y: root.determinantOverlay.labelY - height / 2
+            color: root.squareFlipped ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.primaryText
+            style: Text.Outline
+            styleColor: AppTheme.Theme.workspaceBackground
+            font.pixelSize: 13
+            font.bold: true
+        }
 
         Repeater {
             objectName: "vectorLabels3D"

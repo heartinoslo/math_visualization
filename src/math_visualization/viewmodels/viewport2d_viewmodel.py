@@ -6,8 +6,15 @@ import math
 
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
+from math_visualization.math_core.matrix_analysis import analyze
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.math_core.manim_port import I_HAT_COLOR, J_HAT_COLOR
+from math_visualization.viewmodels.overlay_sizes import (
+    ORIENTATION_ARC_MAX_FRACTION,
+    ORIENTATION_ARC_RADIUS_PX,
+    ORIENTATION_HEAD_HALF_WIDTH_PX,
+    ORIENTATION_HEAD_LENGTH_PX,
+)
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 from math_visualization.viewmodels.workspace_viewmodel import WorkspaceViewModel
@@ -20,7 +27,9 @@ from math_visualization.viewport.viewport_2d import (
 )
 from math_visualization.viewport.transformation_geometry import (
     clip_segment,
+    line_through_origin,
     lines_per_side,
+    orientation_arc,
     transformed_grid,
     unit_square,
 )
@@ -71,6 +80,8 @@ class Viewport2DViewModel(QObject):
         for signal in (transformation.currentMatrixChanged, transformation.visualStateChanged):
             signal.connect(self.vectorShapesChanged)
             signal.connect(self.transformationGeometryChanged)
+        # The kernel line belongs to the target matrix, which can change while A(t) does not.
+        transformation.matrixChanged.connect(self.transformationGeometryChanged)
 
     def _viewport(self) -> Viewport2D:
         return Viewport2D(self._document.workspace_state_2d, self._width, self._height)
@@ -310,10 +321,7 @@ class Viewport2DViewModel(QObject):
         return flat
 
     def _grid_segments(self):
-        view = self._viewport()
-        corners = (view.to_world(0.0, 0.0), view.to_world(self._width, self._height),
-                   view.to_world(0.0, self._height), view.to_world(self._width, 0.0))
-        radius = max(math.hypot(x, y) for x, y in corners)
+        radius = self._view_radius()
         step = self._layout.step.major
         current = self._transformation.current_matrix()
         return transformed_grid(current, step, lines_per_side(current, radius, step))
@@ -356,3 +364,57 @@ class Viewport2DViewModel(QObject):
                 {"label": label, "color": color, "tipX": tip_x, "tipY": tip_y, "isZero": column.is_zero()}
             )
         return basis
+
+    @Property("QVariantMap", notify=transformationGeometryChanged)
+    def determinantOverlay(self) -> dict:
+        """Visual feedback for det, orientation and rank, in screen coordinates.
+
+        ``flipped`` and the arc describe A(t); ``imageLine`` / ``collapsedToOrigin``
+        show where A(t) squashes the plane when its rank drops; ``kernelLine`` is
+        the null space of the target A. Flat lists are empty when not shown.
+        """
+        view = self._viewport()
+        current = self._transformation.current_matrix()
+        live = analyze(current)
+        target = analyze(self._document.matrix)
+        visual = self._document.visual_state
+        overlay = {
+            "flipped": live.determinant < 0.0 and live.is_invertible,
+            "arc": [],
+            "arcHead": [],
+            "imageLine": [],
+            "collapsedToOrigin": live.rank == 0,
+            "kernelLine": [],
+        }
+        label_x, label_y = view.to_screen(*current.apply_point(0.5, 0.5))
+        overlay.update(labelX=label_x, labelY=label_y)
+        if self._width <= 0.0 or self._height <= 0.0:
+            return overlay
+        units = 1.0 / view.pixels_per_unit
+        if visual.show_orientation_arc:
+            shortest = min(current.first_column.length, current.second_column.length)
+            arc = orientation_arc(
+                current,
+                min(ORIENTATION_ARC_RADIUS_PX * units, ORIENTATION_ARC_MAX_FRACTION * shortest),
+                ORIENTATION_HEAD_LENGTH_PX * units,
+                ORIENTATION_HEAD_HALF_WIDTH_PX * units,
+            )
+            if arc is not None:
+                points, head = arc
+                overlay["arc"] = [c for point in points for c in view.to_screen(*point)]
+                overlay["arcHead"] = [c for point in head for c in view.to_screen(*point)]
+        reach = self._view_radius()
+        if live.image_direction is not None:
+            direction = live.image_direction
+            overlay["imageLine"] = self._screen_segments([line_through_origin((direction.x, direction.y), reach)])
+        if visual.show_kernel and target.kernel_direction is not None:
+            direction = target.kernel_direction
+            overlay["kernelLine"] = self._screen_segments([line_through_origin((direction.x, direction.y), reach)])
+        return overlay
+
+    def _view_radius(self) -> float:
+        """Distance from the origin to the farthest viewport corner, in math units."""
+        view = self._viewport()
+        corners = (view.to_world(0.0, 0.0), view.to_world(self._width, self._height),
+                   view.to_world(0.0, self._height), view.to_world(self._width, 0.0))
+        return max(math.hypot(x, y) for x, y in corners)

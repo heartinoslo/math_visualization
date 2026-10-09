@@ -15,17 +15,8 @@ MAX_LINES_PER_SIDE = 40
 
 
 def smallest_singular_value(matrix: Matrix2) -> float:
-    """σ_min of a 2×2 matrix, computed without catastrophic cancellation.
-
-    σ_max² = (‖A‖² + √D) / 2 with D = ‖A‖⁴ − 4·det². D is evaluated as the
-    product ((a−d)² + (b+c)²)·((a+d)² + (b−c)²), which equals it exactly but
-    never subtracts nearly equal numbers; σ_min then follows as |det| / σ_max.
-    """
-    a, b, c, d = matrix.entries
-    frobenius_squared = a * a + b * b + c * c + d * d
-    discriminant = ((a - d) ** 2 + (b + c) ** 2) * ((a + d) ** 2 + (b - c) ** 2)
-    largest = math.sqrt((frobenius_squared + math.sqrt(discriminant)) / 2.0)
-    return 0.0 if largest == 0.0 else abs(matrix.determinant) / largest
+    """σ_min of a 2×2 matrix (see :attr:`Matrix2.singular_values`)."""
+    return matrix.singular_values[1]
 
 
 def lines_per_side(matrix: Matrix2, radius: float, step: float) -> int:
@@ -84,3 +75,59 @@ def clip_segment(segment: Segment, left: float, top: float, right: float, bottom
                 return None
             t1 = min(t1, ratio)
     return ((x1 + t0 * dx, y1 + t0 * dy), (x1 + t1 * dx, y1 + t1 * dy))
+
+
+def orientation_arc(
+    matrix: Matrix2, radius: float, head_length: float, head_half_width: float, segments: int = 32
+) -> tuple[list[Point], list[Point]] | None:
+    """Arc from A·e₁ to A·e₂ around the origin, with an arrowhead at A·e₂.
+
+    It sweeps the signed angle from the first column to the second, whose sine
+    has the sign of det A: counter-clockwise when orientation is preserved,
+    clockwise when it is reversed. Returns ``(arc_points, head_triangle)``, or
+    ``None`` when the columns are not independent (no orientation).
+    """
+    if matrix.rank() < 2 or radius <= 0.0:
+        return None
+    first, second = matrix.first_column, matrix.second_column
+    start = math.atan2(first.y, first.x)
+    sweep = math.atan2(matrix.determinant, first.dot(second))
+    # Keep the head inside the arc: at most half of its length.
+    head = min(head_length, 0.5 * radius * abs(sweep))
+    end = start + sweep
+    shaft_end = end - math.copysign(head / radius, sweep)
+    arc = [
+        (radius * math.cos(angle), radius * math.sin(angle))
+        for angle in (start + (shaft_end - start) * k / segments for k in range(segments + 1))
+    ]
+    tip = (radius * math.cos(end), radius * math.sin(end))
+    base_x, base_y = radius * math.cos(shaft_end), radius * math.sin(shaft_end)
+    # Head base perpendicular to the arc: along the radial direction.
+    radial_x, radial_y = math.cos(shaft_end), math.sin(shaft_end)
+    width = head_half_width * head / head_length if head_length > 0.0 else 0.0
+    head_triangle = [
+        tip,
+        (base_x + width * radial_x, base_y + width * radial_y),
+        (base_x - width * radial_x, base_y - width * radial_y),
+    ]
+    return arc, head_triangle
+
+
+def line_through_origin(direction: tuple[float, float], half_length: float) -> Segment:
+    """The segment of the line ``span{direction}`` within ``half_length`` of the origin."""
+    x, y = direction
+    return ((-half_length * x, -half_length * y), (half_length * x, half_length * y))
+
+
+def ribbon(points: list[Point], half_width: float) -> list[Point]:
+    """Triangles (three points each) of a flat strip of ``2·half_width`` along a polyline."""
+    triangles: list[Point] = []
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        length = math.hypot(x2 - x1, y2 - y1)
+        if length == 0.0:
+            continue
+        nx, ny = -(y2 - y1) / length * half_width, (x2 - x1) / length * half_width
+        a, b = (x1 + nx, y1 + ny), (x1 - nx, y1 - ny)
+        c, d = (x2 + nx, y2 + ny), (x2 - nx, y2 - ny)
+        triangles.extend((a, b, c, c, b, d))
+    return triangles

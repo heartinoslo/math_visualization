@@ -16,9 +16,11 @@ from PySide6.QtQuickControls2 import QQuickStyle
 from math_visualization import __version__
 from math_visualization.infrastructure.exception_handler import install_exception_handler
 from math_visualization.infrastructure.logging_config import configure_logging
-from math_visualization.infrastructure.paths import MAIN_QML_PATH
+from math_visualization.export.manim_export import default_manim_python
+from math_visualization.infrastructure.paths import MAIN_QML_PATH, PROJECT_ROOT
 from math_visualization.persistence import FILE_EXTENSION, RecentProjects, RecoveryStore
 from math_visualization.persistence.recent_projects import SettingsStorage
+from math_visualization.persistence.settings_store import QtSettings
 from math_visualization.rendering.qml_types import register_qml_types
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.application_viewmodel import ApplicationViewModel
@@ -89,11 +91,17 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
     document = SceneDocument()
     recovery_directory = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+    movies = QStandardPaths.writableLocation(QStandardPaths.MoviesLocation)
     view_model = ApplicationViewModel(
         document,
         recent=RecentProjects(SettingsStorage(QSettings())),
         recovery=RecoveryStore(recovery_directory) if recovery_directory else None,
+        settings=QtSettings(QSettings()),
+        default_manim_python=default_manim_python(PROJECT_ROOT),
+        default_export_folder=str(Path(movies) / "Math Visualization") if movies else "",
     )
+    # A render still running when the window closes is stopped with it.
+    application.aboutToQuit.connect(view_model.exporter.shutdown)
     engine = QQmlApplicationEngine()
 
     if not load_main_qml(engine, view_model, logger=logger):

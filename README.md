@@ -40,6 +40,21 @@ pins the exact versions last verified.
 python -m math_visualization   # or: math-visualization, or: python main.py
 ```
 
+## Video export (Manim)
+
+File → Export Video renders the current scene as an MP4 with
+[ManimGL](https://github.com/3b1b/manim) 1.7.2. ManimGL is heavy, so it lives
+in its own environment and runs as a separate process; the application works
+without it. To set it up once:
+
+```powershell
+python scripts/setup_manim_env.py   # creates .venv-manim
+winget install Gyan.FFmpeg          # ManimGL needs ffmpeg on PATH
+```
+
+The export dialog finds `.venv-manim` by itself and offers 480p (30 fps,
+preview) and 1080p (60 fps).
+
 ## Tests
 
 ```powershell

@@ -83,6 +83,11 @@ class Viewport2DViewModel(QObject):
         # The kernel line belongs to the target matrix, which can change while A(t) does not.
         transformation.matrixChanged.connect(self.transformationGeometryChanged)
 
+    @property
+    def viewport_size(self) -> tuple[float, float]:
+        """Size of the canvas in pixels (0 × 0 until QML lays it out)."""
+        return (self._width, self._height)
+
     def _viewport(self) -> Viewport2D:
         return Viewport2D(self._document.workspace_state_2d, self._width, self._height)
 

@@ -144,3 +144,12 @@ def test_rendered_3d_parallelepiped() -> None:
     edge = view.project((1.0, 0.0, 0.0))
     green = shell.rendered_pixel("workspace3D", edge.x, edge.y)
     assert green.green() > green.red() + 30 and green.green() > green.blue() + 30
+
+
+def test_duration_field_sets_seconds_per_step() -> None:
+    shell = Shell()
+    two_matrices(shell)
+    shell.type_into("durationField", "1.5")
+    assert shell.document.animation_state.duration == 1.5
+    compute_in_form(shell, 3, 0, 1)
+    assert shell.app.animation.totalDuration == 6.0

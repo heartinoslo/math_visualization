@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from uuid import uuid4
 
+from math_visualization.math_core import manim_port as manim
 from math_visualization.math_core.vector2 import Vector2
 
 
@@ -15,16 +16,17 @@ from math_visualization.math_core.vector2 import Vector2
 VECTOR_NAME_SEQUENCE = tuple("uvwabcdefghklmnpqrst")
 _SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
-# Distinct from the red/green/blue axis colours and readable on dark and light.
+# Manim colours, leaving out the ones 3Blue1Brown reserves in linear algebra:
+# green (î), red (ĵ), yellow (unit square) and blue (the transformed grid).
 VECTOR_PALETTE = (
-    "#F59E0B",
-    "#A78BFA",
-    "#22D3EE",
-    "#F472B6",
-    "#84CC16",
-    "#FB7185",
-    "#2DD4BF",
-    "#EAB308",
+    manim.ORANGE,
+    manim.PINK,
+    manim.PURPLE_A,
+    manim.GOLD_C,
+    manim.MAROON_C,
+    manim.TEAL_C,
+    manim.PURPLE_C,
+    manim.GREY_A,
 )
 
 MAX_NAME_LENGTH = 24

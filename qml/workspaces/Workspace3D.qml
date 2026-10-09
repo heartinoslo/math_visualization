@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick3D
+import MathVisualization.Rendering
 import "../theme" as AppTheme
 
 // 3D observation workspace. The camera transform, grid geometry and label
@@ -17,6 +18,9 @@ Rectangle {
     readonly property var viewport: app.viewport3D
     readonly property var labels: viewport.labels
     readonly property var vectorArrows: viewport.vectorArrows
+    readonly property var ghostArrows: viewport.ghostArrows
+    readonly property var basisArrows: viewport.basisArrows
+    readonly property var visualState: app.transformation.visualState
     readonly property var vectorLabels: viewport.vectorLabels
 
     function updateViewportSize() {
@@ -41,6 +45,44 @@ Rectangle {
     component FlatMaterial: PrincipledMaterial {
         lighting: PrincipledMaterial.NoLighting
         cullMode: Material.NoCulling
+    }
+
+    // An arrow from the origin whose local +Y points along the vector; Python
+    // supplies the rotation and sizes. A zero vector is shown as a small sphere.
+    component Arrow3D: Node {
+        id: arrowNode
+        property var arrow
+        property color color: "white"
+        rotation: arrow.rotation
+
+        Model {
+            visible: !arrowNode.arrow.isZero
+            source: "#Cylinder"
+            position: Qt.vector3d(0, arrowNode.arrow.shaftLength / 2, 0)
+            scale: Qt.vector3d(arrowNode.arrow.radius / 50,
+                               arrowNode.arrow.shaftLength / 100,
+                               arrowNode.arrow.radius / 50)
+            materials: FlatMaterial { baseColor: arrowNode.color }
+        }
+
+        Model {
+            visible: !arrowNode.arrow.isZero
+            source: "#Cone"
+            position: Qt.vector3d(0, arrowNode.arrow.shaftLength, 0)
+            scale: Qt.vector3d(arrowNode.arrow.headRadius / 50,
+                               arrowNode.arrow.headLength / 100,
+                               arrowNode.arrow.headRadius / 50)
+            materials: FlatMaterial { baseColor: arrowNode.color }
+        }
+
+        Model {
+            visible: arrowNode.arrow.isZero
+            source: "#Sphere"
+            scale: Qt.vector3d(arrowNode.arrow.radius * 3 / 50,
+                               arrowNode.arrow.radius * 3 / 50,
+                               arrowNode.arrow.radius * 3 / 50)
+            materials: FlatMaterial { baseColor: arrowNode.color }
+        }
     }
 
     // A mathematical axis along the node's local +Y, centred on the origin,
@@ -104,13 +146,13 @@ Rectangle {
         // Active XY plane: minor and major grid plus a faint accent fill.
         Model {
             objectName: "minorGrid"
-            geometry: root.viewport.minorGridGeometry
+            geometry: LineSetGeometry { vertices: root.viewport.minorGridVertices }
             materials: FlatMaterial { baseColor: AppTheme.Theme.grid3DMinor }
         }
 
         Model {
             objectName: "majorGrid"
-            geometry: root.viewport.majorGridGeometry
+            geometry: LineSetGeometry { vertices: root.viewport.majorGridVertices }
             materials: FlatMaterial { baseColor: AppTheme.Theme.grid3DMajor }
         }
 
@@ -129,7 +171,7 @@ Rectangle {
         Model {
             objectName: "auxiliaryGrid"
             visible: root.viewport.auxiliaryPlanesVisible
-            geometry: root.viewport.auxiliaryGridGeometry
+            geometry: LineSetGeometry { vertices: root.viewport.auxiliaryGridVertices }
             opacity: AppTheme.Theme.auxiliaryPlaneOpacity
             materials: FlatMaterial { baseColor: AppTheme.Theme.grid3DMajor }
         }
@@ -169,52 +211,68 @@ Rectangle {
 
         // Vectors embedded in the XY plane as (x, y, 0). Each node points its
         // local +Y along the vector; Python supplies the rotation and sizes.
+        // Transformation layer: the unit square, the transformed grid in blue
+        // and the images of the axes, rebuilt by Python for each A(t).
+        Model {
+            objectName: "unitSquare3D"
+            visible: root.visualState.show_unit_square
+            geometry: TriangleGeometry { vertices: root.viewport.unitSquareVertices }
+            opacity: AppTheme.Theme.unitSquareOpacity
+            materials: FlatMaterial { baseColor: AppTheme.Theme.unitSquareColor }
+        }
+
+        Model {
+            objectName: "transformedGrid3D"
+            visible: root.visualState.show_transformed_grid
+            geometry: LineSetGeometry { vertices: root.viewport.transformedGridVertices }
+            materials: FlatMaterial { baseColor: AppTheme.Theme.transformedGridColor }
+        }
+
+        Model {
+            objectName: "transformedAxes3D"
+            visible: root.visualState.show_transformed_grid
+            geometry: LineSetGeometry { vertices: root.viewport.transformedAxisVertices }
+            materials: FlatMaterial { baseColor: AppTheme.Theme.transformedAxisColor }
+        }
+
+        // Faint input vectors while transformed; their tips are the drag handles.
+        Repeater3D {
+            objectName: "ghostArrows3D"
+            model: root.ghostArrows.length
+            delegate: Arrow3D {
+                required property int index
+                arrow: root.ghostArrows[index]
+                color: arrow.color
+                opacity: AppTheme.Theme.ghostOpacity
+            }
+        }
+
+        // A(t)·v for every vector, embedded in the XY plane as (x, y, 0).
         Repeater3D {
             objectName: "vectorArrows3D"
             model: root.vectorArrows.length
-
-            delegate: Node {
-                id: arrowNode
+            delegate: Arrow3D {
                 required property int index
-                readonly property var arrow: root.vectorArrows[index]
-                rotation: arrow.rotation
+                arrow: root.vectorArrows[index]
+                color: arrow.color
+            }
+        }
 
-                Model {
-                    visible: !arrowNode.arrow.isZero
-                    source: "#Cylinder"
-                    position: Qt.vector3d(0, arrowNode.arrow.shaftLength / 2, 0)
-                    scale: Qt.vector3d(arrowNode.arrow.radius / 50,
-                                       arrowNode.arrow.shaftLength / 100,
-                                       arrowNode.arrow.radius / 50)
-                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
-                }
-
-                Model {
-                    visible: !arrowNode.arrow.isZero
-                    source: "#Cone"
-                    position: Qt.vector3d(0, arrowNode.arrow.shaftLength, 0)
-                    scale: Qt.vector3d(arrowNode.arrow.headRadius / 50,
-                                       arrowNode.arrow.headLength / 100,
-                                       arrowNode.arrow.headRadius / 50)
-                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
-                }
-
-                // The zero vector has no direction: a small sphere at the origin.
-                Model {
-                    visible: arrowNode.arrow.isZero
-                    source: "#Sphere"
-                    scale: Qt.vector3d(arrowNode.arrow.radius * 3 / 50,
-                                       arrowNode.arrow.radius * 3 / 50,
-                                       arrowNode.arrow.radius * 3 / 50)
-                    materials: FlatMaterial { baseColor: arrowNode.arrow.color }
-                }
+        // î and ĵ after A(t): the columns of the current matrix.
+        Repeater3D {
+            objectName: "basisArrows3D"
+            model: root.basisArrows.length
+            delegate: Arrow3D {
+                required property int index
+                arrow: root.basisArrows[index]
+                color: index === 0 ? AppTheme.Theme.iHatColor : AppTheme.Theme.jHatColor
             }
         }
 
         Model {
             objectName: "componentLines3D"
             visible: root.viewport.componentLinesVisible
-            geometry: root.viewport.componentLinesGeometry
+            geometry: LineSetGeometry { vertices: root.viewport.componentLineVertices }
             materials: FlatMaterial { baseColor: AppTheme.Theme.secondaryText }
         }
     }

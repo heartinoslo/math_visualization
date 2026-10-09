@@ -106,7 +106,7 @@ def test_3d_short_vectors_shrink_their_head_and_zero_vectors_are_flagged() -> No
     _, view_model, _ = make_app([(0.05, 0.0), (0.0, 0.0)])
     short, zero = view_model.viewport3D.vectorArrows
 
-    assert short["headLength"] == pytest.approx(0.5 * 0.05 * SCENE_UNITS_PER_MATH_UNIT)
+    assert short["headLength"] == pytest.approx(0.3 * 0.05 * SCENE_UNITS_PER_MATH_UNIT)
     assert short["shaftLength"] > 0
     assert zero["isZero"] and not short["isZero"]
 
@@ -118,10 +118,10 @@ def test_3d_labels_and_component_lines_follow_the_selection() -> None:
     names = [label["name"] for label in viewport.vectorLabels]
     assert names == ["u", "v"]
     assert viewport.componentLinesVisible
-    assert viewport.componentLinesGeometry.vertex_count == 4
+    assert len(viewport.componentLineVertices) == 4 * 3
     view_model.scene.clearSelection()
     assert not viewport.componentLinesVisible
-    assert viewport.componentLinesGeometry.vertex_count == 0
+    assert viewport.componentLineVertices == []
 
 
 @pytest.mark.parametrize(

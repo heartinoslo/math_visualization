@@ -170,10 +170,16 @@ def test_rendered_axes_match_python_projection() -> None:
         scene = canvas.mapToScene(QPointF(projected.x, projected.y))
         return image.pixelColor(round(scene.x() * ratio), round(scene.y() * ratio))
 
+    # 3Blue1Brown style: the axes are a bright neutral grey (or the white
+    # transformed axes drawn over them), never the dark background.
+    # Sample between major lines so the blue transformed grid, which crosses
+    # the axes at them, does not blend into the pixel.
     tip = view.axis_half_length
-    x_colour = pixel((tip * 0.5, 0.0, 0.0))
-    y_colour = pixel((0.0, tip * 0.5, 0.0))
-    z_colour = pixel((0.0, 0.0, tip * 0.5))
-    assert x_colour.red() > 150 and x_colour.red() > x_colour.green() + 60
-    assert y_colour.green() > 150 and y_colour.green() > y_colour.red() + 60
-    assert z_colour.blue() > 150 and z_colour.blue() > z_colour.red() + 60
+    # Also stay clear of î, ĵ and the unit square, which lie on the axes up to 1.
+    between = view.grid().step.major * 1.5
+    for point in ((between, 0.0, 0.0), (0.0, between, 0.0), (0.0, 0.0, tip * 0.5)):
+        colour = pixel(point)
+        assert min(colour.red(), colour.green(), colour.blue()) > 150, point
+        assert max(colour.red(), colour.green(), colour.blue()) - min(
+            colour.red(), colour.green(), colour.blue()
+        ) < 30, point

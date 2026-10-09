@@ -7,10 +7,12 @@ import math
 from PySide6.QtCore import QObject, Property, Signal, Slot
 from PySide6.QtGui import QQuaternion, QVector3D
 
-from math_visualization.rendering.line_geometry import LineSetGeometry
+from math_visualization.math_core.vector2 import Vector2
+from math_visualization.rendering.line_geometry import fan_triangles, flatten
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.workspace_state import ProjectionMode
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
+from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
 from math_visualization.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from math_visualization.viewport.viewport_2d import distance_to_segment, format_coordinate, snap_to_step
 from math_visualization.viewport.viewport_3d import (
@@ -24,6 +26,11 @@ from math_visualization.viewport.viewport_3d import (
     math_to_scene,
     plane_segments,
 )
+from math_visualization.viewport.transformation_geometry import (
+    lines_per_side,
+    transformed_grid,
+    unit_square,
+)
 
 
 # Axis thickness stays roughly constant on screen by scaling with distance.
@@ -33,8 +40,12 @@ MIN_TICK_LABEL_SPACING_PX = 28.0
 # Vector arrows, relative to the camera distance so they keep their screen size.
 VECTOR_RADIUS_PER_DISTANCE = 0.0040
 SELECTED_VECTOR_RADIUS_PER_DISTANCE = 0.0058
-VECTOR_HEAD_LENGTH_PER_DISTANCE = 0.045
+VECTOR_HEAD_LENGTH_PER_DISTANCE = 0.03
+# Short arrows (î, ĵ, small vectors) keep most of their length as shaft.
+MAX_HEAD_FRACTION = 0.3
 TIP_HIT_RADIUS_PX = 14.0
+# Height of the transformation layer above the plane, as a fraction of the grid step.
+TRANSFORMED_LAYER_LIFT = 0.002
 SHAFT_HIT_DISTANCE_PX = 6.0
 
 
@@ -51,6 +62,7 @@ class Viewport3DViewModel(QObject):
     gridChanged = Signal()
     cursorChanged = Signal()
     auxiliaryPlanesVisibleChanged = Signal()
+    transformationLayerChanged = Signal()
     vectorSceneChanged = Signal()
     errorOccurred = Signal(str)
 
@@ -59,29 +71,37 @@ class Viewport3DViewModel(QObject):
         document: SceneDocument,
         workspace: WorkspaceViewModel,
         scene: SceneObjectsViewModel,
+        transformation: TransformationViewModel,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self._document = document
         self._workspace = workspace
         self._scene = scene
+        self._transformation = transformation
         self._grab_offset = (0.0, 0.0)
         self._width = 0.0
         self._height = 0.0
         self._cursor: tuple[float, float] | None = None
         self._auxiliary_planes_visible = True
         self._grid: Grid3D | None = None
-        # QQuick3DGeometry only accepts 3D-object parents; this view model owns
-        # the geometries through these references and outlives the QML engine.
-        self._minor_grid = LineSetGeometry()
-        self._major_grid = LineSetGeometry()
-        self._auxiliary_grid = LineSetGeometry()
-        self._component_lines = LineSetGeometry()
+        # Flat vertex data (mathematical x, y, z per vertex). The geometries that
+        # draw it are created in QML, so the 3D scene owns their lifetime.
+        self._minor_grid: list[float] = []
+        self._major_grid: list[float] = []
+        self._auxiliary_grid: list[float] = []
+        self._component_lines: list[float] = []
+        self._transformed_grid: list[float] = []
+        self._transformed_axes: list[float] = []
+        self._unit_square: list[float] = []
         workspace.camera3DChanged.connect(self._refresh)
         scene.vectorsChanged.connect(self._on_vectors_changed)
+        transformation.currentMatrixChanged.connect(self._on_transformation_changed)
+        transformation.visualStateChanged.connect(self.vectorSceneChanged)
         scene.selectionChanged.connect(self._on_vectors_changed)
         self._refresh()
         self._on_vectors_changed()
+        self._rebuild_transformation()
 
     # State ------------------------------------------------------------------
 
@@ -93,6 +113,7 @@ class Viewport3DViewModel(QObject):
         if grid != self._grid:
             self._grid = grid
             self._rebuild_grid(grid)
+            self._rebuild_transformation()
             self.gridChanged.emit()
         self.cameraChanged.emit()
         # Arrow thickness and label positions depend on the camera.
@@ -102,40 +123,62 @@ class Viewport3DViewModel(QObject):
 
     def _on_vectors_changed(self) -> None:
         selected = self._scene.selected_vector
-        if selected is None or selected.vector.is_zero():
-            self._component_lines.set_segments([])
+        image = None if selected is None else self._transformation.current_matrix() @ selected.vector
+        if image is None or image.is_zero():
+            self._component_lines = []
         else:
-            x, y = selected.vector.x, selected.vector.y
-            self._component_lines.set_segments(
+            x, y = image.x, image.y
+            self._component_lines = flatten(
                 [((x, y, 0.0), (x, 0.0, 0.0)), ((x, y, 0.0), (0.0, y, 0.0))]
             )
         self.vectorSceneChanged.emit()
 
+    def _on_transformation_changed(self) -> None:
+        self._rebuild_transformation()
+        self._on_vectors_changed()
+
+    def _rebuild_transformation(self) -> None:
+        """Rebuild the transformed grid, axes and unit square for the current A(t).
+
+        They sit a hair above the plane (relative to the grid spacing) so the
+        coplanar background grid never z-fights with them.
+        """
+        if self._grid is None:
+            return
+        current = self._transformation.current_matrix()
+        step = self._grid.step.major
+        lift = step * TRANSFORMED_LAYER_LIFT
+        lines, axes = transformed_grid(current, step, lines_per_side(current, self._grid.half_extent, step))
+        self._transformed_grid = flatten(((*a, lift), (*b, lift)) for a, b in lines)
+        self._transformed_axes = flatten(((*a, lift), (*b, lift)) for a, b in axes)
+        self._unit_square = flatten(fan_triangles([(*point, lift / 2) for point in unit_square(current)]))
+        self.transformationLayerChanged.emit()
+
     def _rebuild_grid(self, grid: Grid3D) -> None:
         step = grid.step
         center = (grid.center_x, grid.center_y)
-        self._minor_grid.set_segments(
+        self._minor_grid = flatten(
             plane_segments("xy", center, grid.half_extent, step.minor, skip_every=step.subdivisions)
         )
-        self._major_grid.set_segments(plane_segments("xy", center, grid.half_extent, step.major))
+        self._major_grid = flatten(plane_segments("xy", center, grid.half_extent, step.major))
         auxiliary_extent = step.major * AUXILIARY_HALF_EXTENT_MAJORS
-        self._auxiliary_grid.set_segments(
+        self._auxiliary_grid = flatten(
             plane_segments("xz", (grid.center_x, 0.0), auxiliary_extent, step.major)
             + plane_segments("yz", (grid.center_y, 0.0), auxiliary_extent, step.major)
         )
 
     # Geometry for QML ---------------------------------------------------------
 
-    @Property(QObject, constant=True)
-    def minorGridGeometry(self) -> LineSetGeometry:
+    @Property("QVariantList", notify=gridChanged)
+    def minorGridVertices(self) -> list[float]:
         return self._minor_grid
 
-    @Property(QObject, constant=True)
-    def majorGridGeometry(self) -> LineSetGeometry:
+    @Property("QVariantList", notify=gridChanged)
+    def majorGridVertices(self) -> list[float]:
         return self._major_grid
 
-    @Property(QObject, constant=True)
-    def auxiliaryGridGeometry(self) -> LineSetGeometry:
+    @Property("QVariantList", notify=gridChanged)
+    def auxiliaryGridVertices(self) -> list[float]:
         return self._auxiliary_grid
 
     @Property(float, notify=gridChanged)
@@ -350,8 +393,8 @@ class Viewport3DViewModel(QObject):
 
     # Vectors ------------------------------------------------------------------
 
-    @Property(QObject, constant=True)
-    def componentLinesGeometry(self) -> LineSetGeometry:
+    @Property("QVariantList", notify=vectorSceneChanged)
+    def componentLineVertices(self) -> list[float]:
         """Helper lines from the selected vector's tip to the x and y axes."""
         return self._component_lines
 
@@ -360,42 +403,76 @@ class Viewport3DViewModel(QObject):
         selected = self._scene.selected_vector
         return selected is not None and not selected.vector.is_zero()
 
+    def _arrow(self, value: Vector2, selected: bool = False) -> dict:
+        """Scene transform of an arrow from the origin to ``value`` embedded as (x, y, 0).
+
+        The node points its local +Y along the vector; shaft and head are sized
+        from the camera distance so they keep a steady on-screen thickness, and
+        short vectors shrink their head instead of overshooting.
+        """
+        distance = self.viewport().distance
+        radius = distance * (SELECTED_VECTOR_RADIUS_PER_DISTANCE if selected else VECTOR_RADIUS_PER_DISTANCE)
+        length = value.length
+        head = min(distance * VECTOR_HEAD_LENGTH_PER_DISTANCE, MAX_HEAD_FRACTION * length)
+        if value.is_zero():
+            rotation = QQuaternion()
+        else:
+            direction = QVector3D(*math_to_scene((value.x, value.y, 0.0))).normalized()
+            rotation = QQuaternion.rotationTo(QVector3D(0.0, 1.0, 0.0), direction)
+        return {
+            "selected": selected,
+            "isZero": value.is_zero(),
+            "rotation": rotation,
+            "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
+            "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
+            "radius": radius * SCENE_UNITS_PER_MATH_UNIT,
+            "headRadius": max(radius * 2.2, head * 0.22) * SCENE_UNITS_PER_MATH_UNIT,
+        }
+
     @Property("QVariantList", notify=vectorSceneChanged)
     def vectorArrows(self) -> list[dict]:
-        """Scene transforms of each vector arrow, embedded in the XY plane as (x, y, 0).
-
-        Each arrow node points its local +Y along the vector; the shaft and the
-        head are sized from the camera distance so they keep a steady on-screen
-        thickness, and short vectors shrink their head instead of overshooting.
-        """
-        view = self.viewport()
-        distance = view.distance
+        """Arrows for A(t)·v of every vector."""
+        current = self._transformation.current_matrix()
         selected_id = self._document.selected_object_id
         arrows = []
         for vector in self._document.vectors:
-            selected = vector.object_id == selected_id
-            radius = distance * (SELECTED_VECTOR_RADIUS_PER_DISTANCE if selected else VECTOR_RADIUS_PER_DISTANCE)
-            length = vector.vector.length
-            head = min(distance * VECTOR_HEAD_LENGTH_PER_DISTANCE, 0.5 * length)
-            if vector.vector.is_zero():
-                rotation = QQuaternion()
-            else:
-                direction = QVector3D(*math_to_scene((vector.vector.x, vector.vector.y, 0.0))).normalized()
-                rotation = QQuaternion.rotationTo(QVector3D(0.0, 1.0, 0.0), direction)
-            arrows.append(
-                {
-                    "objectId": vector.object_id,
-                    "color": vector.color,
-                    "selected": selected,
-                    "isZero": vector.vector.is_zero(),
-                    "rotation": rotation,
-                    "shaftLength": (length - head) * SCENE_UNITS_PER_MATH_UNIT,
-                    "headLength": head * SCENE_UNITS_PER_MATH_UNIT,
-                    "radius": radius * SCENE_UNITS_PER_MATH_UNIT,
-                    "headRadius": max(radius * 2.4, head * 0.26) * SCENE_UNITS_PER_MATH_UNIT,
-                }
-            )
+            arrow = self._arrow(current @ vector.vector, vector.object_id == selected_id)
+            arrow.update(objectId=vector.object_id, color=vector.color)
+            arrows.append(arrow)
         return arrows
+
+    @Property("QVariantList", notify=vectorSceneChanged)
+    def ghostArrows(self) -> list[dict]:
+        """Faint input vectors while a transformation is applied (the drag handles)."""
+        if not self._document.visual_state.show_ghosts or self._transformation.is_identity_now:
+            return []
+        arrows = []
+        for vector in self._document.vectors:
+            arrow = self._arrow(vector.vector)
+            arrow.update(objectId=vector.object_id, color=vector.color)
+            arrows.append(arrow)
+        return arrows
+
+    @Property("QVariantList", notify=vectorSceneChanged)
+    def basisArrows(self) -> list[dict]:
+        """î and ĵ after A(t): the columns of the current matrix."""
+        if not self._document.visual_state.show_basis_vectors:
+            return []
+        current = self._transformation.current_matrix()
+        return [self._arrow(current.first_column, True), self._arrow(current.second_column, True)]
+
+    @Property("QVariantList", notify=transformationLayerChanged)
+    def transformedGridVertices(self) -> list[float]:
+        return self._transformed_grid
+
+    @Property("QVariantList", notify=transformationLayerChanged)
+    def transformedAxisVertices(self) -> list[float]:
+        return self._transformed_axes
+
+    @Property("QVariantList", notify=transformationLayerChanged)
+    def unitSquareVertices(self) -> list[float]:
+        """Two triangles covering A(t)·[0, 1]²."""
+        return self._unit_square
 
     @Property("QVariantList", notify=vectorSceneChanged)
     def vectorLabels(self) -> list[dict]:
@@ -405,7 +482,8 @@ class Viewport3DViewModel(QObject):
             return []
         labels = []
         for vector in self._document.vectors:
-            projection = view.project((vector.vector.x, vector.vector.y, 0.0))
+            image = self._transformation.current_matrix() @ vector.vector
+            projection = view.project((image.x, image.y, 0.0))
             if projection.visible:
                 labels.append(
                     {
@@ -420,25 +498,35 @@ class Viewport3DViewModel(QObject):
 
     @Slot(float, float, result="QVariantMap")
     def hitTest(self, screen_x: float, screen_y: float) -> dict:
-        """Return ``{"objectId", "part"}`` using the projected tips and shafts."""
+        """Return ``{"objectId", "part"}`` using projected tips and shafts.
+
+        The draggable tip is the input vector (its ghost while transformed);
+        either the input or the transformed shaft selects.
+        """
         view = self.viewport()
         origin = view.project((0.0, 0.0, 0.0))
         pointer = (screen_x, screen_y)
         selected = self._document.selected_object_id
+        current = self._transformation.current_matrix()
         best_tip = best_shaft = None
         for vector in self._document.vectors:
             tip = view.project((vector.vector.x, vector.vector.y, 0.0))
-            if not tip.visible:
-                continue
+            image = current @ vector.vector
+            transformed_tip = view.project((image.x, image.y, 0.0))
             rank = vector.object_id != selected
-            tip_distance = math.hypot(screen_x - tip.x, screen_y - tip.y)
-            if tip_distance <= TIP_HIT_RADIUS_PX:
-                candidate = (tip_distance, rank, vector.object_id)
-                best_tip = min(best_tip, candidate) if best_tip else candidate
+            if tip.visible:
+                tip_distance = math.hypot(screen_x - tip.x, screen_y - tip.y)
+                if tip_distance <= TIP_HIT_RADIUS_PX:
+                    candidate = (tip_distance, rank, vector.object_id)
+                    best_tip = min(best_tip, candidate) if best_tip else candidate
             if origin.visible:
-                shaft_distance = distance_to_segment(pointer, (origin.x, origin.y), (tip.x, tip.y))
-                if shaft_distance <= SHAFT_HIT_DISTANCE_PX:
-                    candidate = (shaft_distance, rank, vector.object_id)
+                distances = [
+                    distance_to_segment(pointer, (origin.x, origin.y), (end.x, end.y))
+                    for end in (tip, transformed_tip)
+                    if end.visible
+                ]
+                if distances and min(distances) <= SHAFT_HIT_DISTANCE_PX:
+                    candidate = (min(distances), rank, vector.object_id)
                     best_shaft = min(best_shaft, candidate) if best_shaft else candidate
         if best_tip:
             return {"objectId": best_tip[2], "part": "tip"}

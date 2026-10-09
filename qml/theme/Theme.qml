@@ -22,9 +22,18 @@ QtObject {
     readonly property color axisColor: darkMode ? "#7D8898" : "#6E7988"
     readonly property color grid3DMinor: darkMode ? "#262D38" : "#DCE2EA"
     readonly property color grid3DMajor: darkMode ? "#3A4453" : "#B9C3D0"
-    readonly property color axisXColor: darkMode ? "#F2555A" : "#D93036"
-    readonly property color axisYColor: darkMode ? "#4CC38A" : "#218358"
-    readonly property color axisZColor: darkMode ? "#6E9BFF" : "#2F5FD0"
+    // 3Blue1Brown style (colours from manim's default_config.yml): neutral axes,
+    // a blue transformed grid, green î, red ĵ and a yellow unit square.
+    readonly property color axisXColor: darkMode ? "#BBBBBB" : "#555B66"
+    readonly property color axisYColor: axisXColor
+    readonly property color axisZColor: axisXColor
+    readonly property color transformedGridColor: darkMode ? "#29ABCA" : "#1E88AD"
+    readonly property color transformedAxisColor: darkMode ? "#FFFFFF" : "#1B1F24"
+    readonly property color iHatColor: darkMode ? "#83C167" : "#699C52"
+    readonly property color jHatColor: darkMode ? "#FC6255" : "#CF5044"
+    readonly property color unitSquareColor: darkMode ? "#FFFF00" : "#E0B000"
+    readonly property real unitSquareOpacity: darkMode ? 0.3 : 0.35
+    readonly property real ghostOpacity: 0.35
     readonly property real activePlaneOpacity: 0.07
     readonly property real auxiliaryPlaneOpacity: 0.45
     readonly property color overlayBackground: darkMode ? "#D922262D" : "#E6FFFFFF"

@@ -34,11 +34,105 @@ Rectangle {
         }
     }
 
-    ColumnLayout {
+    component SectionTitle: Label {
+        color: AppTheme.Theme.primaryText
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+    }
+
+    ScrollView {
+        id: scroller
         anchors.fill: parent
         anchors.margins: AppTheme.Theme.spacingLarge
+        contentWidth: availableWidth
+        clip: true
+
+    ColumnLayout {
+        width: scroller.availableWidth
         spacing: AppTheme.Theme.spacingMedium
 
+        // Matrix A of the transformation -------------------------------------
+        SectionTitle {
+            text: "MATRIX  A"
+        }
+
+        GridLayout {
+            objectName: "matrixEditor"
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: AppTheme.Theme.spacingSmall
+            rowSpacing: AppTheme.Theme.spacingSmall
+
+            Repeater {
+                model: ["a", "b", "c", "d"]
+                delegate: ValueField {
+                    required property int index
+                    required property string modelData
+                    objectName: "matrixEntry" + modelData.toUpperCase()
+                    horizontalAlignment: TextInput.AlignHCenter
+                    value: app.transformation.entryTexts[index]
+                    commit: function (text) { app.transformation.setEntryText(index, text) }
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Entry " + modelData + (index % 2 === 0
+                        ? " (first column: where î goes)" : " (second column: where ĵ goes)")
+                }
+            }
+        }
+
+        Flow {
+            objectName: "matrixPresets"
+            Layout.fillWidth: true
+            spacing: 4
+
+            Repeater {
+                model: app.transformation.presets
+                delegate: Button {
+                    required property var modelData
+                    objectName: "preset_" + modelData.key
+                    text: modelData.label
+                    implicitHeight: AppTheme.Theme.compactControlHeight
+                    font.pixelSize: 11
+                    onClicked: app.transformation.applyPreset(modelData.key)
+                }
+            }
+        }
+
+        GridLayout {
+            objectName: "visualToggles"
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: 0
+            rowSpacing: 0
+
+            Repeater {
+                model: [
+                    { key: "show_transformed_grid", label: "Grid", tip: "Transformed grid" },
+                    { key: "show_unit_square", label: "Square", tip: "Unit square A·[0,1]²" },
+                    { key: "show_basis_vectors", label: "î, ĵ", tip: "Transformed basis vectors (the columns of A)" },
+                    { key: "show_ghosts", label: "Ghosts", tip: "Faint input vectors; drag them to edit" }
+                ]
+                delegate: CheckBox {
+                    required property var modelData
+                    objectName: "toggle_" + modelData.key
+                    Layout.fillWidth: true
+                    text: modelData.label
+                    font.pixelSize: 12
+                    checked: app.transformation.visualState[modelData.key]
+                    onToggled: app.transformation.setVisualFlag(modelData.key, checked)
+                    ToolTip.visible: hovered
+                    ToolTip.text: modelData.tip
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: AppTheme.Theme.spacingSmall
+            height: 1
+            color: AppTheme.Theme.borderColor
+        }
+
+        // Selected vector ---------------------------------------------------
         Label {
             text: "PROPERTIES"
             color: AppTheme.Theme.primaryText
@@ -130,8 +224,6 @@ Rectangle {
             }
         }
 
-        Item {
-            Layout.fillHeight: true
-        }
+    }
     }
 }

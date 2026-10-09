@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 import QtQuick.Window
 import "../components/canvas2d"
 import "../theme" as AppTheme
@@ -151,6 +152,71 @@ Rectangle {
         }
     }
 
+    // Transformation layer (3Blue1Brown style): the unit square, the
+    // transformed grid in blue and the images of the axes, all computed in
+    // Python from A(t) and clipped to the viewport.
+    readonly property var visualState: app.transformation.visualState
+    readonly property var transformedGridPaths: segmentPaths(viewport.transformedGridLines)
+    readonly property var transformedAxisPaths: segmentPaths(viewport.transformedAxisLines)
+    readonly property var unitSquarePoints: polygonPath(viewport.unitSquare)
+    readonly property var basisVectors: viewport.basisVectors
+
+    function segmentPaths(flat) {
+        const paths = []
+        for (let i = 0; i + 3 < flat.length; i += 4)
+            paths.push([Qt.point(flat[i], flat[i + 1]), Qt.point(flat[i + 2], flat[i + 3])])
+        return paths
+    }
+
+    function polygonPath(flat) {
+        const points = []
+        for (let i = 0; i + 1 < flat.length; i += 2)
+            points.push(Qt.point(flat[i], flat[i + 1]))
+        if (points.length > 0)
+            points.push(points[0])
+        return points
+    }
+
+    Item {
+        objectName: "transformationLayer"
+        anchors.fill: parent
+
+        Shape {
+            objectName: "unitSquare"
+            anchors.fill: parent
+            visible: root.visualState.show_unit_square
+            preferredRendererType: Shape.CurveRenderer
+
+            ShapePath {
+                strokeColor: AppTheme.Theme.unitSquareColor
+                strokeWidth: 1
+                fillColor: Qt.alpha(AppTheme.Theme.unitSquareColor, AppTheme.Theme.unitSquareOpacity)
+                PathPolyline { path: root.unitSquarePoints }
+            }
+        }
+
+        Shape {
+            objectName: "transformedGrid"
+            anchors.fill: parent
+            visible: root.visualState.show_transformed_grid
+            preferredRendererType: Shape.CurveRenderer
+
+            ShapePath {
+                strokeColor: AppTheme.Theme.transformedGridColor
+                strokeWidth: 1.4
+                fillColor: "transparent"
+                PathMultiline { paths: root.transformedGridPaths }
+            }
+
+            ShapePath {
+                strokeColor: AppTheme.Theme.transformedAxisColor
+                strokeWidth: 2
+                fillColor: "transparent"
+                PathMultiline { paths: root.transformedAxisPaths }
+            }
+        }
+    }
+
     // Layer 4: tick labels. When an axis leaves the view its labels stay
     // pinned to the nearest edge so the scale remains readable.
     Item {
@@ -256,6 +322,23 @@ Rectangle {
                 readonly property real screenLength: Math.hypot(dx, dy)
                 anchors.fill: parent
 
+                // The input vector, faint while a transformation is applied;
+                // its tip is the drag handle.
+                Arrow2D {
+                    objectName: "ghostArrow"
+                    visible: vectorItem.shape.showGhost
+                        && (vectorItem.shape.ghostX !== root.originX || vectorItem.shape.ghostY !== root.originY)
+                    opacity: AppTheme.Theme.ghostOpacity
+                    x1: root.originX
+                    y1: root.originY
+                    x2: vectorItem.shape.ghostX
+                    y2: vectorItem.shape.ghostY
+                    strokeColor: vectorItem.shape.color
+                    lineWidth: AppTheme.Theme.vectorLineWidth
+                    headLength: AppTheme.Theme.vectorHeadLength
+                    headHalfWidth: AppTheme.Theme.vectorHeadHalfWidth
+                }
+
                 Arrow2D {
                     visible: !vectorItem.shape.isZero
                     x1: root.originX
@@ -283,9 +366,10 @@ Rectangle {
                 }
 
                 Point2D {
+                    objectName: "dragHandle"
                     visible: vectorItem.shape.selected
-                    centerX: vectorItem.shape.tipX
-                    centerY: vectorItem.shape.tipY
+                    centerX: vectorItem.shape.showGhost ? vectorItem.shape.ghostX : vectorItem.shape.tipX
+                    centerY: vectorItem.shape.showGhost ? vectorItem.shape.ghostY : vectorItem.shape.tipY
                     radius2D: AppTheme.Theme.tipHandleRadius
                     color: AppTheme.Theme.workspaceBackground
                     border.width: 2
@@ -304,6 +388,46 @@ Rectangle {
                     font.pixelSize: AppTheme.Theme.vectorLabelPixelSize
                     font.italic: true
                     font.bold: vectorItem.shape.selected
+                }
+            }
+        }
+
+        // î and ĵ after A(t), drawn last so the columns of the matrix stay visible.
+        Repeater {
+            objectName: "basisVectors2D"
+            model: root.visualState.show_basis_vectors ? root.basisVectors.length : 0
+
+            delegate: Item {
+                id: basisItem
+                required property int index
+                readonly property var basis: root.basisVectors[index]
+                readonly property color basisColor: index === 0 ? AppTheme.Theme.iHatColor : AppTheme.Theme.jHatColor
+                readonly property real dx: basis.tipX - root.originX
+                readonly property real dy: basis.tipY - root.originY
+                readonly property real screenLength: Math.hypot(dx, dy)
+                anchors.fill: parent
+                visible: !basis.isZero
+
+                Arrow2D {
+                    x1: root.originX
+                    y1: root.originY
+                    x2: basisItem.basis.tipX
+                    y2: basisItem.basis.tipY
+                    strokeColor: basisItem.basisColor
+                    lineWidth: AppTheme.Theme.selectedVectorLineWidth
+                    headLength: AppTheme.Theme.vectorHeadLength
+                    headHalfWidth: AppTheme.Theme.vectorHeadHalfWidth
+                }
+
+                Label {
+                    readonly property real unitX: basisItem.screenLength > 0 ? basisItem.dx / basisItem.screenLength : 0
+                    readonly property real unitY: basisItem.screenLength > 0 ? basisItem.dy / basisItem.screenLength : 0
+                    text: basisItem.basis.label
+                    x: basisItem.basis.tipX + unitX * 16 - width / 2
+                    y: basisItem.basis.tipY + unitY * 16 - height / 2
+                    color: basisItem.basisColor
+                    font.pixelSize: AppTheme.Theme.vectorLabelPixelSize + 2
+                    font.bold: true
                 }
             }
         }

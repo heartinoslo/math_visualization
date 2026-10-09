@@ -60,6 +60,14 @@ ApplicationWindow {
         onActivated: app.scene.removeSelected()
     }
 
+    // Frame clock for the transformation: one advance per rendered frame keeps
+    // playback in step with the display.
+    FrameAnimation {
+        objectName: "playbackClock"
+        running: app.animation.playing
+        onTriggered: app.animation.advance(frameTime)
+    }
+
     WorkspacePage {
         id: workspacePage
         anchors.fill: parent

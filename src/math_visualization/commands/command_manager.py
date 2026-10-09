@@ -11,7 +11,7 @@ from math_visualization.scene.scene_document import SceneDocument
 class CommandManager:
     """The single entry point for edits of one document.
 
-    ``on_change`` is called with the command after every execute, undo and
+    Listeners are called with the command after every execute, undo and
     redo, so observers (view models) refresh from one place.
     """
 
@@ -21,7 +21,7 @@ class CommandManager:
         on_change: Callable[[Command], None] | None = None,
     ):
         self._document = document
-        self._on_change = on_change
+        self._listeners: list[Callable[[Command], None]] = [on_change] if on_change else []
         self._undo_stack: list[Command] = []
         self._redo_stack: list[Command] = []
 
@@ -63,6 +63,9 @@ class CommandManager:
         self._notify(command)
         return True
 
+    def add_listener(self, listener: Callable[[Command], None]) -> None:
+        self._listeners.append(listener)
+
     def _notify(self, command: Command) -> None:
-        if self._on_change is not None:
-            self._on_change(command)
+        for listener in self._listeners:
+            listener(command)

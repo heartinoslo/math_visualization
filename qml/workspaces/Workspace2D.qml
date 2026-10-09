@@ -160,6 +160,17 @@ Rectangle {
     readonly property var transformedAxisPaths: segmentPaths(viewport.transformedAxisLines)
     readonly property var unitSquarePoints: polygonPath(viewport.unitSquare)
     readonly property var basisVectors: viewport.basisVectors
+    readonly property var determinantOverlay: viewport.determinantOverlay
+    readonly property bool squareFlipped: visualState.show_flip_tint && determinantOverlay.flipped
+    readonly property var orientationArcPoints: openPath(determinantOverlay.arc)
+    readonly property var orientationHeadPoints: polygonPath(determinantOverlay.arcHead)
+
+    function openPath(flat) {
+        const points = []
+        for (let i = 0; i + 1 < flat.length; i += 2)
+            points.push(Qt.point(flat[i], flat[i + 1]))
+        return points
+    }
 
     function segmentPaths(flat) {
         const paths = []
@@ -188,9 +199,11 @@ Rectangle {
             preferredRendererType: Shape.CurveRenderer
 
             ShapePath {
-                strokeColor: AppTheme.Theme.unitSquareColor
+                readonly property color squareColor: root.squareFlipped
+                    ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.unitSquareColor
+                strokeColor: squareColor
                 strokeWidth: 1
-                fillColor: Qt.alpha(AppTheme.Theme.unitSquareColor, AppTheme.Theme.unitSquareOpacity)
+                fillColor: Qt.alpha(squareColor, AppTheme.Theme.unitSquareOpacity)
                 PathPolyline { path: root.unitSquarePoints }
             }
         }
@@ -213,6 +226,87 @@ Rectangle {
                 strokeWidth: 2
                 fillColor: "transparent"
                 PathMultiline { paths: root.transformedAxisPaths }
+            }
+        }
+
+        // Rank feedback: the kernel of A (dashed: these inputs land on the
+        // origin) and, when A(t) is singular, the line or point the plane
+        // collapses onto.
+        Segment2D {
+            objectName: "kernelLine"
+            readonly property var line: root.determinantOverlay.kernelLine
+            visible: line.length === 4
+            dashed: true
+            lineWidth: 2
+            strokeColor: AppTheme.Theme.kernelColor
+            x1: visible ? line[0] : 0
+            y1: visible ? line[1] : 0
+            x2: visible ? line[2] : 0
+            y2: visible ? line[3] : 0
+        }
+
+        Segment2D {
+            objectName: "imageLine"
+            readonly property var line: root.determinantOverlay.imageLine
+            visible: line.length === 4
+            lineWidth: 3
+            strokeColor: AppTheme.Theme.imageLineColor
+            x1: visible ? line[0] : 0
+            y1: visible ? line[1] : 0
+            x2: visible ? line[2] : 0
+            y2: visible ? line[3] : 0
+        }
+
+        Point2D {
+            objectName: "collapsedOrigin"
+            visible: root.determinantOverlay.collapsedToOrigin
+            centerX: root.originX
+            centerY: root.originY
+            radius2D: 6
+            color: AppTheme.Theme.imageLineColor
+        }
+
+        // Orientation: the turn from î to ĵ, reversed when det < 0.
+        Shape {
+            id: orientationArc
+            objectName: "orientationArc"
+            anchors.fill: parent
+            visible: root.orientationArcPoints.length > 1
+            preferredRendererType: Shape.CurveRenderer
+            readonly property color arcColor: root.determinantOverlay.flipped
+                ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.orientationArcColor
+
+            ShapePath {
+                strokeColor: orientationArc.arcColor
+                strokeWidth: 2
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                PathPolyline { path: root.orientationArcPoints }
+            }
+
+            ShapePath {
+                strokeColor: "transparent"
+                fillColor: orientationArc.arcColor
+                PathPolyline { path: root.orientationHeadPoints }
+            }
+        }
+
+        // det A(t) at the centre of the unit square.
+        Label {
+            objectName: "determinantLabel"
+            visible: root.visualState.show_unit_square
+            text: app.matrixProperties.currentDeterminantText
+            x: root.determinantOverlay.labelX - width / 2
+            y: root.determinantOverlay.labelY - height / 2
+            padding: 2
+            leftPadding: 5
+            rightPadding: 5
+            color: root.squareFlipped ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.primaryText
+            font.pixelSize: 13
+            font.bold: true
+            background: Rectangle {
+                radius: 3
+                color: AppTheme.Theme.overlayBackground
             }
         }
     }

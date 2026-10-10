@@ -10,7 +10,7 @@ def test_default_title() -> None:
 def test_default_schema_version() -> None:
     document = SceneDocument()
 
-    assert document.schema_version == 1
+    assert document.schema_version == 2
 
 
 def test_document_ids_are_unique() -> None:

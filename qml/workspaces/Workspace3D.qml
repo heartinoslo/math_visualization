@@ -24,6 +24,8 @@ Rectangle {
     readonly property var vectorLabels: viewport.vectorLabels
     readonly property var determinantOverlay: viewport.determinantOverlay
     readonly property bool squareFlipped: visualState.show_flip_tint && determinantOverlay.flipped
+    readonly property bool showsTransformation: app.transformation.showsTransformation
+    readonly property var figures: viewport.figures
 
     function updateViewportSize() {
         viewport.setViewportSize(width, height)
@@ -56,6 +58,7 @@ Rectangle {
         property var arrow
         property color color: "white"
         rotation: arrow.rotation
+        position: arrow.position !== undefined ? arrow.position : Qt.vector3d(0, 0, 0)
 
         Model {
             visible: !arrowNode.arrow.isZero
@@ -211,68 +214,114 @@ Rectangle {
             materials: FlatMaterial { baseColor: AppTheme.Theme.primaryText }
         }
 
-        // Vectors embedded in the XY plane as (x, y, 0). Each node points its
-        // local +Y along the vector; Python supplies the rotation and sizes.
-        // Transformation layer: the unit square, the transformed grid in blue
-        // and the images of the axes, rebuilt by Python for each A(t).
-        Model {
-            objectName: "unitSquare3D"
-            visible: root.visualState.show_unit_square
-            geometry: TriangleGeometry { vertices: root.viewport.unitSquareVertices }
-            opacity: AppTheme.Theme.unitSquareOpacity
-            materials: FlatMaterial {
-                baseColor: root.squareFlipped ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.unitSquareColor
+        // Transformation layer, shown while the active matrix is a 2×2 being
+        // played as a plane transformation.
+        Node {
+            objectName: "transformationLayer3D"
+            visible: root.showsTransformation
+
+            // Transformation layer: the unit square, the transformed grid in blue
+            // and the images of the axes, rebuilt by Python for each A(t).
+            Model {
+                objectName: "unitSquare3D"
+                visible: root.visualState.show_unit_square
+                geometry: TriangleGeometry { vertices: root.viewport.unitSquareVertices }
+                opacity: AppTheme.Theme.unitSquareOpacity
+                materials: FlatMaterial {
+                    baseColor: root.squareFlipped ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.unitSquareColor
+                }
+            }
+
+            Model {
+                objectName: "transformedGrid3D"
+                visible: root.visualState.show_transformed_grid
+                geometry: LineSetGeometry { vertices: root.viewport.transformedGridVertices }
+                materials: FlatMaterial { baseColor: AppTheme.Theme.transformedGridColor }
+            }
+
+            Model {
+                objectName: "transformedAxes3D"
+                visible: root.visualState.show_transformed_grid
+                geometry: LineSetGeometry { vertices: root.viewport.transformedAxisVertices }
+                materials: FlatMaterial { baseColor: AppTheme.Theme.transformedAxisColor }
+            }
+
+            // Rank and orientation feedback, flat strips just above the plane (see
+            // the 2D canvas): kernel of A, the line A(t) collapses onto, and the
+            // turn from î to ĵ.
+            Model {
+                objectName: "kernelLine3D"
+                visible: root.determinantOverlay.kernelVertices.length > 0
+                geometry: TriangleGeometry { vertices: root.determinantOverlay.kernelVertices }
+                materials: FlatMaterial { baseColor: AppTheme.Theme.kernelColor }
+            }
+
+            Model {
+                objectName: "imageLine3D"
+                visible: root.determinantOverlay.imageLineVertices.length > 0
+                geometry: TriangleGeometry { vertices: root.determinantOverlay.imageLineVertices }
+                materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
+            }
+
+            Model {
+                objectName: "collapsedOrigin3D"
+                visible: root.determinantOverlay.collapsedToOrigin
+                source: "#Sphere"
+                scale: Qt.vector3d(root.viewport.axisRadius * 5 / 50,
+                                   root.viewport.axisRadius * 5 / 50,
+                                   root.viewport.axisRadius * 5 / 50)
+                materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
+            }
+
+            Model {
+                objectName: "orientationArc3D"
+                visible: root.determinantOverlay.arcVertices.length > 0
+                geometry: TriangleGeometry { vertices: root.determinantOverlay.arcVertices }
+                materials: FlatMaterial {
+                    baseColor: root.determinantOverlay.flipped
+                        ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.orientationArcColor
+                }
             }
         }
 
-        Model {
-            objectName: "transformedGrid3D"
-            visible: root.visualState.show_transformed_grid
-            geometry: LineSetGeometry { vertices: root.viewport.transformedGridVertices }
-            materials: FlatMaterial { baseColor: AppTheme.Theme.transformedGridColor }
-        }
+        // Matrices as objects (operations and 3×3 matrices): the columns as
+        // arrows and the parallelogram / parallelepiped they span.
+        Node {
+            objectName: "figureLayer3D"
+            visible: root.figures.visible
 
-        Model {
-            objectName: "transformedAxes3D"
-            visible: root.visualState.show_transformed_grid
-            geometry: LineSetGeometry { vertices: root.viewport.transformedAxisVertices }
-            materials: FlatMaterial { baseColor: AppTheme.Theme.transformedAxisColor }
-        }
+            Model {
+                objectName: "figureOperandFill3D"
+                visible: root.figures.operandFill.length > 0
+                geometry: TriangleGeometry { vertices: root.figures.operandFill }
+                opacity: 0.08
+                materials: FlatMaterial { baseColor: AppTheme.Theme.primaryText }
+            }
 
-        // Rank and orientation feedback, flat strips just above the plane (see
-        // the 2D canvas): kernel of A, the line A(t) collapses onto, and the
-        // turn from î to ĵ.
-        Model {
-            objectName: "kernelLine3D"
-            visible: root.determinantOverlay.kernelVertices.length > 0
-            geometry: TriangleGeometry { vertices: root.determinantOverlay.kernelVertices }
-            materials: FlatMaterial { baseColor: AppTheme.Theme.kernelColor }
-        }
+            Model {
+                objectName: "figureResultFill3D"
+                visible: root.figures.resultFill.length > 0
+                geometry: TriangleGeometry { vertices: root.figures.resultFill }
+                opacity: 0.25
+                materials: FlatMaterial { baseColor: AppTheme.Theme.resultColor }
+            }
 
-        Model {
-            objectName: "imageLine3D"
-            visible: root.determinantOverlay.imageLineVertices.length > 0
-            geometry: TriangleGeometry { vertices: root.determinantOverlay.imageLineVertices }
-            materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
-        }
+            Model {
+                objectName: "figureEdges3D"
+                visible: root.figures.edges.length > 0
+                geometry: LineSetGeometry { vertices: root.figures.edges }
+                materials: FlatMaterial { baseColor: AppTheme.Theme.resultColor }
+            }
 
-        Model {
-            objectName: "collapsedOrigin3D"
-            visible: root.determinantOverlay.collapsedToOrigin
-            source: "#Sphere"
-            scale: Qt.vector3d(root.viewport.axisRadius * 5 / 50,
-                               root.viewport.axisRadius * 5 / 50,
-                               root.viewport.axisRadius * 5 / 50)
-            materials: FlatMaterial { baseColor: AppTheme.Theme.imageLineColor }
-        }
-
-        Model {
-            objectName: "orientationArc3D"
-            visible: root.determinantOverlay.arcVertices.length > 0
-            geometry: TriangleGeometry { vertices: root.determinantOverlay.arcVertices }
-            materials: FlatMaterial {
-                baseColor: root.determinantOverlay.flipped
-                    ? AppTheme.Theme.flippedSquareColor : AppTheme.Theme.orientationArcColor
+            Repeater3D {
+                objectName: "figureArrows3D"
+                model: root.figures.arrows.length
+                delegate: Arrow3D {
+                    required property int index
+                    arrow: root.figures.arrows[index]
+                    color: AppTheme.Theme.columnColor(arrow.column)
+                    opacity: arrow.role === "result" ? 1.0 : AppTheme.Theme.operandFigureOpacity
+                }
             }
         }
 
@@ -302,7 +351,7 @@ Rectangle {
         // î and ĵ after A(t): the columns of the current matrix.
         Repeater3D {
             objectName: "basisArrows3D"
-            model: root.basisArrows.length
+            model: root.showsTransformation ? root.basisArrows.length : 0
             delegate: Arrow3D {
                 required property int index
                 arrow: root.basisArrows[index]
@@ -353,7 +402,7 @@ Rectangle {
         // hide the vectors behind it.
         Label {
             objectName: "determinantLabel3D"
-            visible: root.visualState.show_unit_square && root.determinantOverlay.labelVisible
+            visible: root.showsTransformation && root.visualState.show_unit_square && root.determinantOverlay.labelVisible
             text: app.matrixProperties.currentDeterminantText
             x: root.determinantOverlay.labelX - width / 2
             y: root.determinantOverlay.labelY - height / 2
@@ -362,6 +411,22 @@ Rectangle {
             styleColor: AppTheme.Theme.workspaceBackground
             font.pixelSize: 13
             font.bold: true
+        }
+
+        Repeater {
+            objectName: "figureLabels3D"
+            model: root.figures.labels
+            delegate: Label {
+                required property var modelData
+                x: modelData.x + 8
+                y: modelData.y - height - 2
+                text: modelData.text
+                color: modelData.role === "result" ? AppTheme.Theme.resultColor : AppTheme.Theme.secondaryText
+                style: Text.Outline
+                styleColor: AppTheme.Theme.workspaceBackground
+                font.pixelSize: 16
+                font.bold: true
+            }
         }
 
         Repeater {
@@ -486,7 +551,9 @@ Rectangle {
             Label {
                 objectName: "dimensionHintLabel"
                 Layout.fillWidth: true
-                text: "Mathematical dimension: 2D · Display workspace: 3D · Active plane: XY"
+                text: app.operations.needs3D
+                    ? "Mathematical dimension: 3D · 3×3 matrices: columns î, ĵ, k̂ and the parallelepiped they span"
+                    : "Mathematical dimension: 2D · Display workspace: 3D · Active plane: XY"
                 color: AppTheme.Theme.primaryText
                 font.pixelSize: 12
                 elide: Text.ElideRight

@@ -12,7 +12,9 @@ from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.animation_viewmodel import AnimationViewModel
 from math_visualization.viewmodels.export_viewmodel import ExportViewModel
 from math_visualization.viewmodels.inspector_viewmodel import InspectorViewModel
+from math_visualization.viewmodels.matrices_viewmodel import MatricesViewModel
 from math_visualization.viewmodels.matrix_properties_viewmodel import MatrixPropertiesViewModel
+from math_visualization.viewmodels.operations_viewmodel import OperationsViewModel
 from math_visualization.viewmodels.project_viewmodel import ProjectViewModel
 from math_visualization.viewmodels.scene_objects_viewmodel import SceneObjectsViewModel
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
@@ -58,6 +60,10 @@ class ApplicationViewModel(QObject):
         self._transformation = TransformationViewModel(
             document, self._commands, self._animation, self._scene, parent=self
         )
+        self._matrices = MatricesViewModel(document, self._commands, self._transformation, parent=self)
+        self._operations = OperationsViewModel(
+            document, self._commands, self._transformation, self._animation, parent=self
+        )
         self._matrix_properties = MatrixPropertiesViewModel(document, self._transformation, parent=self)
         self._viewport_2d = Viewport2DViewModel(
             document, self._workspace, self._scene, self._transformation, parent=self
@@ -65,6 +71,9 @@ class ApplicationViewModel(QObject):
         self._viewport_3d = Viewport3DViewModel(
             document, self._workspace, self._scene, self._transformation, parent=self
         )
+        for viewport in (self._viewport_2d, self._viewport_3d):
+            viewport.set_figure_source(self._operations.figure_scene)
+            self._operations.viewChanged.connect(viewport.figuresChanged)
         self._project = ProjectViewModel(
             document, self._commands, self.replace_document, recent, recovery, parent=self
         )
@@ -88,6 +97,8 @@ class ApplicationViewModel(QObject):
             self._scene,
             self._inspector,
             self._transformation,
+            self._matrices,
+            self._operations,
             self._matrix_properties,
             self._viewport_3d,
         ):
@@ -109,7 +120,14 @@ class ApplicationViewModel(QObject):
         self._document.replace_contents(document)
         self._commands.clear()
         self.clearError()
-        for child in (self._animation, self._scene, self._transformation, self._workspace):
+        for child in (
+            self._animation,
+            self._scene,
+            self._matrices,
+            self._operations,
+            self._transformation,
+            self._workspace,
+        ):
             child.reload()
 
     @Property(QObject, constant=True)
@@ -139,6 +157,14 @@ class ApplicationViewModel(QObject):
     @Property(QObject, constant=True)
     def transformation(self) -> TransformationViewModel:
         return self._transformation
+
+    @Property(QObject, constant=True)
+    def matrices(self) -> MatricesViewModel:
+        return self._matrices
+
+    @Property(QObject, constant=True)
+    def operations(self) -> OperationsViewModel:
+        return self._operations
 
     @Property(QObject, constant=True)
     def matrixProperties(self) -> MatrixPropertiesViewModel:

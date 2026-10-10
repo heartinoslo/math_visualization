@@ -244,6 +244,13 @@ class ExportViewModel(QObject):
         if self._environment_state != "ready":
             self.errorOccurred.emit("ManimGL is not ready: " + self._environment_message)
             return False
+        active = self._document.active_matrix
+        if self._document.active_operation_id is not None or (active is not None and active.size == 3):
+            self.errorOccurred.emit(
+                "Video export currently covers 2×2 transformations; select a 2×2 matrix "
+                "(export of operations and 3×3 matrices comes later)"
+            )
+            return False
         preset = QUALITY_PRESETS[self._quality]
         size_2d, size_3d = self._viewport_sizes()
         spec = build_scene_spec(self._document, size_2d, size_3d)

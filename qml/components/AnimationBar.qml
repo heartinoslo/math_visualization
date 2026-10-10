@@ -87,6 +87,35 @@ Rectangle {
             font.pixelSize: 12
         }
 
+        // Seconds per segment: the whole transformation, or each step of an operation.
+        TextField {
+            id: durationField
+            objectName: "durationField"
+            implicitHeight: AppTheme.Theme.compactControlHeight
+            implicitWidth: 52
+            font.pixelSize: 11
+            horizontalAlignment: TextInput.AlignHCenter
+            text: Number(root.animation.duration.toFixed(2)).toString()
+            validator: DoubleValidator { bottom: 0.1; top: 60; decimals: 2 }
+            onEditingFinished: {
+                const seconds = parseFloat(text.replace(",", "."))
+                if (seconds > 0)
+                    root.animation.setDuration(seconds)
+                text = Qt.binding(function () { return Number(root.animation.duration.toFixed(2)).toString() })
+            }
+            ToolTip.visible: hovered
+            ToolTip.text: root.animation.segments > 1
+                ? "Seconds per step (" + root.animation.segments + " steps, "
+                    + root.animation.totalDuration.toFixed(1) + " s in all)"
+                : "Seconds for the transformation"
+        }
+
+        Label {
+            text: root.animation.segments > 1 ? "s / step" : "s"
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 11
+        }
+
         ComboBox {
             objectName: "rateFunctionBox"
             implicitHeight: AppTheme.Theme.compactControlHeight

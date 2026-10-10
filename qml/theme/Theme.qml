@@ -31,6 +31,17 @@ QtObject {
     readonly property color transformedAxisColor: darkMode ? "#FFFFFF" : "#1B1F24"
     readonly property color iHatColor: darkMode ? "#83C167" : "#699C52"
     readonly property color jHatColor: darkMode ? "#FC6255" : "#CF5044"
+    // Third basis vector / column (manim BLUE_C).
+    readonly property color kHatColor: darkMode ? "#58C4DD" : "#2A8FB0"
+    // Matrix algebra: entries of the left operand, right operand and result.
+    readonly property color leftOperandColor: darkMode ? "#FF862F" : "#D9691A"
+    readonly property color rightOperandColor: darkMode ? "#5CD0B3" : "#2E9C80"
+    readonly property color resultColor: darkMode ? "#FFFF00" : "#C49A00"
+    readonly property real operandFigureOpacity: 0.35
+
+    function columnColor(index) {
+        return index === 0 ? iHatColor : index === 1 ? jHatColor : kHatColor
+    }
     readonly property color unitSquareColor: darkMode ? "#FFFF00" : "#E0B000"
     readonly property real unitSquareOpacity: darkMode ? 0.3 : 0.35
     // Stage 6 feedback: a flipped square (det < 0) in manim's RED_B, the line the

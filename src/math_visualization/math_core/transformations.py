@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from math_visualization.math_core.manim_port import RATE_FUNCTIONS, straight_path
 from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
 
 
 INTERPOLATION_IDENTITY_TO_TARGET = "identity_to_target"
@@ -52,3 +53,23 @@ MATRIX_PRESETS: tuple[MatrixPreset, ...] = (
 )
 
 PRESETS_BY_KEY = {preset.key: preset for preset in MATRIX_PRESETS}
+
+
+@dataclass(frozen=True)
+class Matrix3Preset:
+    key: str
+    label: str
+    matrix: Matrix3
+
+
+MATRIX3_PRESETS: tuple[Matrix3Preset, ...] = (
+    Matrix3Preset("identity", "Identity", Matrix3.identity()),
+    Matrix3Preset("scale", "Scale", Matrix3((2, 0, 0, 0, 1, 0, 0, 0, 0.5))),
+    Matrix3Preset("rotation_z", "Rotate z 90°", Matrix3((0, -1, 0, 1, 0, 0, 0, 0, 1))),
+    Matrix3Preset("rotation_x", "Rotate x 90°", Matrix3((1, 0, 0, 0, 0, -1, 0, 1, 0))),
+    Matrix3Preset("shear", "Shear", Matrix3((1, 0, 1, 0, 1, 0, 0, 0, 1))),
+    Matrix3Preset("projection", "Project (xy)", Matrix3((1, 0, 0, 0, 1, 0, 0, 0, 0))),
+    Matrix3Preset("singular", "Singular", Matrix3((1, 2, 3, 0, 1, 1, 1, 3, 4))),
+)
+
+PRESETS3_BY_KEY = {preset.key: preset for preset in MATRIX3_PRESETS}

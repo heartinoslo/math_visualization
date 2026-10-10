@@ -101,6 +101,37 @@ class Matrix2:
         det = self.determinant
         return Matrix2(self.d / det, -self.b / det, -self.c / det, self.a / det)
 
+    @property
+    def size(self) -> int:
+        return 2
+
+    @property
+    def columns(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        return ((self.a, self.c), (self.b, self.d))
+
+    def entry(self, row: int, column: int) -> float:
+        return self.entries[2 * row + column]
+
+    @classmethod
+    def from_rows(cls, rows) -> Matrix2:
+        return cls(*(value for row in rows for value in row))
+
+    def transpose(self) -> Matrix2:
+        return Matrix2(self.a, self.c, self.b, self.d)
+
+    def scaled(self, factor: float) -> Matrix2:
+        return Matrix2(factor * self.a, factor * self.b, factor * self.c, factor * self.d)
+
+    def __add__(self, other: Matrix2) -> Matrix2:
+        if not isinstance(other, Matrix2):
+            return NotImplemented
+        return Matrix2(self.a + other.a, self.b + other.b, self.c + other.c, self.d + other.d)
+
+    def __sub__(self, other: Matrix2) -> Matrix2:
+        if not isinstance(other, Matrix2):
+            return NotImplemented
+        return Matrix2(self.a - other.a, self.b - other.b, self.c - other.c, self.d - other.d)
+
     def apply(self, vector: Vector2) -> Vector2:
         return Vector2(self.a * vector.x + self.b * vector.y, self.c * vector.x + self.d * vector.y)
 

@@ -13,8 +13,7 @@ Schema policy
 * A file from a *newer* schema than this build understands is refused (the
   user is told to update the application); it is never guessed at.
 * A file from an *older* schema is upgraded step by step through
-  :data:`MIGRATIONS` before validation. Version 1 is the first released
-  format, so the table is empty for now.
+  :data:`MIGRATIONS` before validation.
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from math_visualization import __version__
 from math_visualization.scene.scene_document import SceneDocument
@@ -43,7 +43,19 @@ MAX_FILE_BYTES = 16 * 1024 * 1024
 
 # MIGRATIONS[n] upgrades the data of schema version n to version n + 1.
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
-MIGRATIONS: dict[int, Migration] = {}
+
+
+def _single_matrix_to_named_matrices(data: dict[str, Any]) -> dict[str, Any]:
+    """1 → 2: the one ``matrix`` becomes the named matrix "A", which is active."""
+    if "matrix" not in data:
+        raise SceneFormatError("matrix is missing")
+    identifier = uuid4().hex
+    data["matrices"] = [{"id": identifier, "name": "A", "size": 2, "entries": data.pop("matrix")}]
+    data["active_matrix_id"] = identifier
+    return data
+
+
+MIGRATIONS: dict[int, Migration] = {1: _single_matrix_to_named_matrices}
 
 
 class ProjectFileError(Exception):
@@ -108,9 +120,9 @@ def read_project_data(path: str | os.PathLike) -> dict[str, Any]:
 def read_project(path: str | os.PathLike) -> SceneDocument:
     """Load a project file, upgrading older schemas, or raise :class:`ProjectFileError`."""
     name = Path(path).name
-    data = upgrade(read_project_data(path), name)
+    data = read_project_data(path)
     try:
-        return document_from_dict(data)
+        return document_from_dict(upgrade(data, name))
     except SceneFormatError as error:
         raise ProjectFileError(f"{name} is damaged: {error}") from error
 

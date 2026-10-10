@@ -52,36 +52,68 @@ Rectangle {
         width: scroller.availableWidth
         spacing: AppTheme.Theme.spacingMedium
 
-        // Matrix A of the transformation -------------------------------------
-        SectionTitle {
-            text: "MATRIX  A"
+        // The active matrix ----------------------------------------------------
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: AppTheme.Theme.spacingMedium
+
+            SectionTitle {
+                text: "MATRIX"
+            }
+
+            ValueField {
+                objectName: "matrixNameField"
+                visible: app.transformation.hasMatrix
+                Layout.maximumWidth: 120
+                value: app.transformation.matrixName
+                maximumLength: 24
+                font.bold: true
+                commit: function (text) { app.matrices.rename(app.matrices.activeId, text) }
+                ToolTip.visible: hovered
+                ToolTip.text: "Name of the active matrix"
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        Label {
+            objectName: "noMatrixHint"
+            Layout.fillWidth: true
+            visible: !app.transformation.hasMatrix
+            text: "No matrix. Add one with “+ Matrix” on the left."
+            color: AppTheme.Theme.secondaryText
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
         }
 
         GridLayout {
             objectName: "matrixEditor"
+            enabled: app.transformation.hasMatrix
             Layout.fillWidth: true
-            columns: 2
+            columns: app.transformation.matrixSize
             columnSpacing: AppTheme.Theme.spacingSmall
             rowSpacing: AppTheme.Theme.spacingSmall
 
+            // Entries row by row; objectNames run matrixEntryA, B, C, … in that order.
             Repeater {
-                model: ["a", "b", "c", "d"]
+                model: app.transformation.entryTexts.length
                 delegate: ValueField {
                     required property int index
-                    required property string modelData
-                    objectName: "matrixEntry" + modelData.toUpperCase()
+                    readonly property int size: app.transformation.matrixSize
+                    objectName: "matrixEntry" + "ABCDEFGHI"[index]
                     horizontalAlignment: TextInput.AlignHCenter
-                    value: app.transformation.entryTexts[index]
+                    value: app.transformation.entryTexts[index] || ""
                     commit: function (text) { app.transformation.setEntryText(index, text) }
                     ToolTip.visible: hovered
-                    ToolTip.text: "Entry " + modelData + (index % 2 === 0
-                        ? " (first column: where î goes)" : " (second column: where ĵ goes)")
+                    ToolTip.text: "Row " + (Math.floor(index / size) + 1) + ", column " + (index % size + 1)
+                        + " (column " + (index % size + 1) + " is where basis vector " + ["î", "ĵ", "k̂"][index % size] + " goes)"
                 }
             }
         }
 
         Flow {
             objectName: "matrixPresets"
+            enabled: app.transformation.hasMatrix
             Layout.fillWidth: true
             spacing: 4
 
@@ -100,6 +132,8 @@ Rectangle {
 
         GridLayout {
             objectName: "visualToggles"
+            // These options belong to the plane transformation of a 2×2 matrix.
+            enabled: app.transformation.showsTransformation
             Layout.fillWidth: true
             columns: 2
             columnSpacing: 0
@@ -126,6 +160,87 @@ Rectangle {
                     ToolTip.visible: hovered
                     ToolTip.text: modelData.tip
                 }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: AppTheme.Theme.spacingSmall
+            height: 1
+            color: AppTheme.Theme.borderColor
+        }
+
+        // Matrix operations -------------------------------------------------------
+        SectionTitle {
+            text: "OPERATIONS"
+        }
+
+        ColumnLayout {
+            objectName: "operationForm"
+            Layout.fillWidth: true
+            spacing: AppTheme.Theme.spacingSmall
+            readonly property var kind: app.operations.kinds[kindBox.currentIndex]
+            readonly property var choices: app.operations.operandChoices
+
+            ComboBox {
+                id: kindBox
+                objectName: "operationKind"
+                Layout.fillWidth: true
+                model: app.operations.kinds
+                textRole: "label"
+                font.pixelSize: 12
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: AppTheme.Theme.spacingSmall
+
+                TextField {
+                    id: scalarField
+                    objectName: "operationScalar"
+                    visible: parent.parent.kind.needsScalar
+                    Layout.preferredWidth: 56
+                    placeholderText: "k"
+                    text: "2"
+                    horizontalAlignment: TextInput.AlignHCenter
+                    font.pixelSize: 12
+                }
+                ComboBox {
+                    id: leftBox
+                    objectName: "operandLeft"
+                    Layout.fillWidth: true
+                    model: parent.parent.choices
+                    textRole: "label"
+                    font.pixelSize: 12
+                }
+                ComboBox {
+                    id: rightBox
+                    objectName: "operandRight"
+                    visible: parent.parent.kind.operands === 2
+                    Layout.fillWidth: true
+                    model: parent.parent.choices
+                    textRole: "label"
+                    currentIndex: Math.min(1, count - 1)
+                    font.pixelSize: 12
+                }
+            }
+
+            Button {
+                objectName: "computeButton"
+                Layout.fillWidth: true
+                text: "Compute"
+                highlighted: true
+                enabled: parent.choices.length > 0
+                implicitHeight: AppTheme.Theme.compactControlHeight
+                font.pixelSize: 12
+                onClicked: {
+                    const choices = parent.choices
+                    const left = leftBox.currentIndex >= 0 ? choices[leftBox.currentIndex].id : ""
+                    const right = rightBox.currentIndex >= 0 ? choices[rightBox.currentIndex].id : ""
+                    app.operations.compute(parent.kind.key, left, right, scalarField.text)
+                }
+                ToolTip.visible: hovered
+                ToolTip.text: "The result becomes a new matrix; open the Algebra tab to see each step."
             }
         }
 
@@ -184,7 +299,7 @@ Rectangle {
             columnSpacing: AppTheme.Theme.spacingMedium
             rowSpacing: 3
 
-            FieldLabel { text: "det A" }
+            FieldLabel { text: "det " + app.transformation.matrixName }
             Label {
                 objectName: "determinantValue"
                 text: root.matrixProperties.determinantText
@@ -192,7 +307,7 @@ Rectangle {
                 font.pixelSize: 13
             }
 
-            FieldLabel { text: "Area" }
+            FieldLabel { text: root.matrixProperties.size === 3 ? "Volume" : "Area" }
             Label {
                 objectName: "areaScaleValue"
                 text: root.matrixProperties.areaScaleText
@@ -234,7 +349,7 @@ Rectangle {
                 font.pixelSize: 13
             }
 
-            FieldLabel { text: "A⁻¹" ; Layout.alignment: Qt.AlignTop }
+            FieldLabel { text: app.transformation.matrixName + "⁻¹" ; Layout.alignment: Qt.AlignTop }
             Item {
                 Layout.fillWidth: true
                 implicitHeight: root.matrixProperties.invertible ? inverseGrid.implicitHeight : noInverse.implicitHeight
@@ -243,7 +358,7 @@ Rectangle {
                     id: inverseGrid
                     objectName: "inverseMatrix"
                     visible: root.matrixProperties.invertible
-                    columns: 2
+                    columns: root.matrixProperties.size
                     columnSpacing: AppTheme.Theme.spacingMedium
                     rowSpacing: 0
 
@@ -263,7 +378,7 @@ Rectangle {
                     id: noInverse
                     objectName: "noInverseText"
                     visible: !root.matrixProperties.invertible
-                    text: "none (det A = 0)"
+                    text: "none (det " + app.transformation.matrixName + " = 0)"
                     color: AppTheme.Theme.secondaryText
                     font.pixelSize: 13
                 }
@@ -272,13 +387,13 @@ Rectangle {
 
         Button {
             objectName: "applyInverseButton"
-            text: "Apply A⁻¹"
+            text: "Apply " + app.transformation.matrixName + "⁻¹"
             implicitHeight: AppTheme.Theme.compactControlHeight
             font.pixelSize: 12
             enabled: root.matrixProperties.invertible
             onClicked: root.matrixProperties.applyInverse()
             ToolTip.visible: hovered
-            ToolTip.text: "Replace A by its inverse (undoable)"
+            ToolTip.text: "Replace " + app.transformation.matrixName + " by its inverse (undoable)"
         }
 
         Rectangle {

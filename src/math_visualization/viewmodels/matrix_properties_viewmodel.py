@@ -10,6 +10,9 @@ from math_visualization.math_core.matrix_analysis import (
     Orientation,
     analyze,
 )
+from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
+from math_visualization.math_core.matrix_algebra import OperationKind, derive
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.viewmodels.formatting import format_number, format_quantity
 from math_visualization.viewmodels.transformation_viewmodel import TransformationViewModel
@@ -48,16 +51,30 @@ class MatrixPropertiesViewModel(QObject):
         super().__init__(parent)
         self._document = document
         self._transformation = transformation
-        self._analysis = analyze(document.matrix)
+        self._analysis = analyze(self._value())
         transformation.matrixChanged.connect(self._on_matrix_changed)
         transformation.currentMatrixChanged.connect(self.currentChanged)
+
+    @property
+    def _name(self) -> str:
+        active = self._document.active_matrix
+        return active.name if active is not None else "A"
+
+    def _value(self) -> Matrix2 | Matrix3:
+        """The active matrix (2×2 or 3×3), or I when there is none."""
+        active = self._document.active_matrix
+        return active.matrix if active is not None else Matrix2.identity()
 
     def analysis(self) -> MatrixAnalysis:
         return self._analysis
 
     def _on_matrix_changed(self) -> None:
-        self._analysis = analyze(self._document.matrix)
+        self._analysis = analyze(self._value())
         self.propertiesChanged.emit()
+
+    @Property(int, notify=propertiesChanged)
+    def size(self) -> int:
+        return self._analysis.size
 
     # Target matrix A ------------------------------------------------------------------
 
@@ -107,16 +124,22 @@ class MatrixPropertiesViewModel(QObject):
         """One sentence explaining the status, shown under the badge."""
         analysis = self._analysis
         if analysis.status is MatrixStatus.REGULAR:
-            return "Every output comes from exactly one input; A⁻¹ undoes A."
+            return f"Every output comes from exactly one input; {self._name}⁻¹ undoes {self._name}."
         if analysis.status is MatrixStatus.NEAR_SINGULAR:
             return (
-                f"Invertible, but the plane is squashed almost flat (κ ≈ "
-                f"{format_quantity(analysis.condition_number, 3)}). A⁻¹ amplifies small "
+                f"Invertible, but {self._space} is squashed almost flat (κ ≈ "
+                f"{format_quantity(analysis.condition_number, 3)}). {self._name}⁻¹ amplifies small "
                 "errors enormously."
             )
-        if analysis.rank == 1:
-            return "The plane collapses onto a line: a whole line of inputs lands on the origin."
-        return "Every input collapses onto the origin."
+        if analysis.rank == 0:
+            return "Every input collapses onto the origin."
+        target = {1: "a line", 2: "a plane"}[analysis.rank]
+        lost = {1: "a line", 2: "a plane"}[analysis.size - analysis.rank]
+        return f"{self._space.capitalize()} collapses onto {target}: {lost} of inputs lands on the origin."
+
+    @property
+    def _space(self) -> str:
+        return "the plane" if self._analysis.size == 2 else "space"
 
     @Property("QStringList", notify=propertiesChanged)
     def inverseEntryTexts(self) -> list[str]:
@@ -125,9 +148,12 @@ class MatrixPropertiesViewModel(QObject):
 
     @Property(str, notify=propertiesChanged)
     def determinantFormula(self) -> str:
-        a, b, c, d = self._document.matrix.entries
+        if self._analysis.size == 3:
+            # det along the first row, as the algebra view derives it.
+            return derive(OperationKind.DETERMINANT, (self._name,), (self._analysis.matrix,)).steps[-1].formula
+        a, b, c, d = self._analysis.matrix.entries
         return (
-            f"det A = ad − bc = {_factor(a)}·{_factor(d)} − {_factor(b)}·{_factor(c)} = "
+            f"det {self._name} = ad − bc = {_factor(a)}·{_factor(d)} − {_factor(b)}·{_factor(c)} = "
             f"{format_quantity(self._analysis.determinant)}"
         )
 
@@ -135,7 +161,7 @@ class MatrixPropertiesViewModel(QObject):
     def rankFormula(self) -> str:
         analysis = self._analysis
         verdict = "invertible" if analysis.is_invertible else "not invertible"
-        return f"rank A = {analysis.rank}  ({verdict}; σ_min/σ_max = {self._ratio_text()})"
+        return f"rank {self._name} = {analysis.rank}  ({verdict}; σ_min/σ_max = {self._ratio_text()})"
 
     def _ratio_text(self) -> str:
         largest, smallest = self._analysis.singular_values

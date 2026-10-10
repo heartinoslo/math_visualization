@@ -11,8 +11,12 @@ from __future__ import annotations
 from typing import Any
 
 from math_visualization.math_core.matrix2 import Matrix2
+from math_visualization.math_core.matrix3 import Matrix3
+from math_visualization.math_core.matrix_algebra import OperationKind, check
 from math_visualization.math_core.vector2 import Vector2
 from math_visualization.scene.animation_state import AnimationState
+from math_visualization.scene.matrix_object import SUPPORTED_SIZES, MatrixObject
+from math_visualization.scene.operation_record import OperationRecord
 from math_visualization.scene.scene_document import SceneDocument
 from math_visualization.scene.vector_object import VectorObject
 from math_visualization.scene.visual_state import VISUAL_FLAGS, VisualState
@@ -23,7 +27,9 @@ from math_visualization.scene.workspace_state import (
 )
 
 
-CURRENT_SCHEMA_VERSION = 1
+# 1: a single "matrix". 2: named 2×2 / 3×3 "matrices" and "active_matrix_id",
+# plus (optional) computed "operations" and "active_operation_id".
+CURRENT_SCHEMA_VERSION = 2
 
 
 class SceneFormatError(ValueError):
@@ -34,7 +40,7 @@ def document_to_dict(document: SceneDocument) -> dict[str, Any]:
     camera_2d = document.workspace_state_2d
     camera_3d = document.workspace_state_3d
     return {
-        "schema_version": document.schema_version,
+        "schema_version": CURRENT_SCHEMA_VERSION,
         "document_id": document.document_id,
         "title": document.title,
         "mathematical_dimension": 2,
@@ -51,7 +57,31 @@ def document_to_dict(document: SceneDocument) -> dict[str, Any]:
             "distance": camera_3d.distance,
             "projection_mode": camera_3d.projection_mode.value,
         },
-        "matrix": [list(row) for row in document.matrix.rows],
+        "matrices": [
+            {
+                "id": matrix.object_id,
+                "name": matrix.name,
+                "size": matrix.size,
+                "entries": [list(row) for row in matrix.matrix.rows],
+            }
+            for matrix in document.matrices
+        ],
+        "active_matrix_id": document.active_matrix_id,
+        "operations": [
+            {
+                "id": operation.object_id,
+                "kind": operation.kind.value,
+                "operands": [
+                    {"name": name, "size": value.size, "entries": [list(row) for row in value.rows]}
+                    for name, value in zip(operation.operand_names, operation.operands)
+                ],
+                "scalar": operation.scalar,
+                "result_name": operation.result_name,
+                "result_matrix_id": operation.result_matrix_id,
+            }
+            for operation in document.operations
+        ],
+        "active_operation_id": document.active_operation_id,
         "animation": {
             "progress": document.animation_state.progress,
             "duration": document.animation_state.duration,
@@ -100,15 +130,52 @@ def _document_from_dict(data: Any) -> SceneDocument:
     target = camera_3d["target"]
     _require(isinstance(target, list) and len(target) == 3, "3D target must have three numbers")
     animation = data["animation"]
-    rows = data["matrix"]
+    matrices: list[MatrixObject] = []
+    for entry in data["matrices"]:
+        matrices.append(
+            MatrixObject(
+                object_id=_string(entry["id"], "matrix id"),
+                name=_string(entry["name"], "matrix name"),
+                matrix=_matrix(entry),
+            )
+        )
+    matrix_ids = [matrix.object_id for matrix in matrices]
+    _require(len(set(matrix_ids)) == len(matrix_ids), "matrix ids must be unique")
+    active = data["active_matrix_id"]
     _require(
-        isinstance(rows, list) and len(rows) == 2 and all(isinstance(r, list) and len(r) == 2 for r in rows),
-        "matrix must be 2x2",
+        active in matrix_ids if matrices else active is None,
+        "active_matrix_id must name a matrix (or be null when there are none)",
     )
     visual = data["visual_state"]
     _require(isinstance(visual, dict), "visual_state must be an object")
     for name in VISUAL_FLAGS:
         _require(isinstance(visual[name], bool), f"visual_state.{name} must be a boolean")
+
+    operations: list[OperationRecord] = []
+    for entry in data.get("operations", []):
+        kind = OperationKind(entry["kind"])
+        operands = tuple(_matrix(operand) for operand in entry["operands"])
+        names = tuple(_string(operand["name"], "operand name") for operand in entry["operands"])
+        scalar = entry.get("scalar")
+        scalar = None if scalar is None else _number(scalar)
+        check(kind, operands, scalar)
+        result_id = entry.get("result_matrix_id")
+        _require(result_id is None or isinstance(result_id, str), "result_matrix_id must be a string")
+        operations.append(
+            OperationRecord(
+                object_id=_string(entry["id"], "operation id"),
+                kind=kind,
+                operand_names=names,
+                operands=operands,
+                scalar=scalar,
+                result_name=_string(entry.get("result_name", ""), "result_name"),
+                result_matrix_id=result_id,
+            )
+        )
+    operation_ids = [operation.object_id for operation in operations]
+    _require(len(set(operation_ids)) == len(operation_ids), "operation ids must be unique")
+    active_operation = data.get("active_operation_id")
+    _require(active_operation is None or active_operation in operation_ids, "active_operation_id must name an operation")
 
     vectors: list[VectorObject] = []
     for entry in data["vectors"]:
@@ -157,11 +224,27 @@ def _document_from_dict(data: Any) -> SceneDocument:
             playback_speed=_number(animation["playback_speed"]),
             interpolation=_string(animation["interpolation"], "interpolation"),
         ),
-        matrix=Matrix2(*(_number(value) for row in rows for value in row)),
+        matrices=matrices,
+        active_matrix_id=active,
+        operations=operations,
+        active_operation_id=active_operation,
         visual_state=VisualState(**{name: visual[name] for name in VISUAL_FLAGS}),
         vectors=vectors,
         selected_object_id=selected,
     )
+
+
+def _matrix(entry: Any) -> Matrix2 | Matrix3:
+    """A ``{"size": n, "entries": [[…], …]}`` object as a 2×2 or 3×3 matrix."""
+    size = entry["size"]
+    _require(size in SUPPORTED_SIZES, f"unsupported matrix size {size!r}")
+    rows = entry["entries"]
+    _require(
+        isinstance(rows, list) and len(rows) == size and all(isinstance(r, list) and len(r) == size for r in rows),
+        f"matrix must be {size}x{size}",
+    )
+    values = [_number(value) for row in rows for value in row]
+    return Matrix2(*values) if size == 2 else Matrix3(tuple(values))
 
 
 def _require(condition: bool, message: str) -> None:

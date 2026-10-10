@@ -72,7 +72,7 @@ Rectangle {
         TabBar {
             id: workspaceTabs
             objectName: "workspaceTabs"
-            currentIndex: root.workspaceMode === "3d" ? 1 : 0
+            currentIndex: root.workspaceMode === "3d" ? 1 : root.workspaceMode === "algebra" ? 2 : 0
             implicitHeight: AppTheme.Theme.controlHeight
             spacing: 2
             background: Rectangle {
@@ -80,7 +80,7 @@ Rectangle {
                 color: AppTheme.Theme.windowBackground
                 border.color: AppTheme.Theme.borderColor
             }
-            onCurrentIndexChanged: root.workspaceModeRequested(currentIndex === 1 ? "3d" : "2d")
+            onCurrentIndexChanged: root.workspaceModeRequested(["2d", "3d", "algebra"][currentIndex])
 
             WorkspaceTab {
                 objectName: "workspace2DTab"
@@ -90,6 +90,12 @@ Rectangle {
             WorkspaceTab {
                 objectName: "workspace3DTab"
                 text: "3D"
+            }
+
+            WorkspaceTab {
+                objectName: "workspaceAlgebraTab"
+                text: "Algebra"
+                implicitWidth: 70
             }
         }
     }

@@ -59,12 +59,12 @@ def test_undo_and_redo_shortcuts_and_menu_texts() -> None:
     shell.app.scene.addVector()
     shell.click("preset_rotation")
     undo = shell.find("undoAction")
-    assert undo.property("text") == "Undo Edit matrix" and undo.property("enabled")
+    assert undo.property("text") == "Undo Edit A" and undo.property("enabled")
 
     QTest.keyClick(shell.window, Qt.Key_Z, Qt.ControlModifier)
     shell.process()
     assert shell.document.matrix == Matrix2.identity()
-    assert shell.find("redoAction").property("text") == "Redo Edit matrix"
+    assert shell.find("redoAction").property("text") == "Redo Edit A"
 
     QTest.keyClick(shell.window, Qt.Key_Z, Qt.ControlModifier | Qt.ShiftModifier)
     shell.process()
@@ -126,7 +126,7 @@ def test_new_with_unsaved_changes_can_save_first(tmp_path) -> None:
 
     assert shell.document.vectors == [] and shell.app.project.displayName == "Untitled"
     saved = json.loads((tmp_path / "keep.mvscene").read_text(encoding="utf-8"))
-    assert saved["matrix"] == [[1.0, 1.0], [0.0, 1.0]]
+    assert saved["matrices"][0]["entries"] == [[1.0, 1.0], [0.0, 1.0]]
 
 
 def test_open_recent_reopens_through_the_guard(tmp_path) -> None:

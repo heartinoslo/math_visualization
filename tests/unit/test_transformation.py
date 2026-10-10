@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from math_visualization.commands import CommandManager, SetMatrixCommand
+from math_visualization.commands import CommandManager
 from math_visualization.math_core import Matrix2, Vector2
 from math_visualization.math_core.manim_port import I_HAT_COLOR, J_HAT_COLOR, smooth
 from math_visualization.scene.animation_state import AnimationState
@@ -125,7 +125,7 @@ def test_bad_entries_and_unknown_presets_are_rejected() -> None:
     document, app = make_app()
 
     assert not app.transformation.setEntryText(1, "abc")
-    assert "Matrix entry b" in app.errorMessage
+    assert "Matrix entry a₁₂" in app.errorMessage
     assert not app.transformation.applyPreset("spin")
     assert document.matrix == Matrix2.identity()
 
@@ -180,10 +180,10 @@ def test_matrix_animation_and_visual_state_round_trip() -> None:
 
     data = document_to_dict(document)
 
-    assert data["matrix"] == [[1.0, 2.0], [0.5, 1.0]]
+    assert data["matrices"][0]["entries"] == [[1.0, 2.0], [0.5, 1.0]]
     assert data["animation"]["interpolation"] == "identity_to_target"
     assert document_from_dict(data) == document
-    data["matrix"] = [[1.0, 2.0]]
+    data["matrices"][0]["entries"] = [[1.0, 2.0]]
     with pytest.raises(SceneFormatError):
         document_from_dict(data)
 

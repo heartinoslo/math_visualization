@@ -55,6 +55,7 @@ class Viewport2DViewModel(QObject):
     cursorChanged = Signal()
     vectorShapesChanged = Signal()
     transformationGeometryChanged = Signal()
+    figuresChanged = Signal()
 
     def __init__(
         self,
@@ -66,6 +67,8 @@ class Viewport2DViewModel(QObject):
     ):
         super().__init__(parent)
         self._document = document
+        # Matrices drawn as objects (operations, 3×3); set by the application view model.
+        self._figure_source = lambda: None
         self._workspace = workspace
         self._scene = scene
         self._transformation = transformation
@@ -83,6 +86,11 @@ class Viewport2DViewModel(QObject):
         # The kernel line belongs to the target matrix, which can change while A(t) does not.
         transformation.matrixChanged.connect(self.transformationGeometryChanged)
 
+    def set_figure_source(self, source) -> None:
+        """``source()`` returns the :class:`FigureScene` to draw, or ``None``."""
+        self._figure_source = source
+        self.figuresChanged.emit()
+
     @property
     def viewport_size(self) -> tuple[float, float]:
         """Size of the canvas in pixels (0 × 0 until QML lays it out)."""
@@ -96,6 +104,7 @@ class Viewport2DViewModel(QObject):
         self.gridChanged.emit()
         self.vectorShapesChanged.emit()
         self.transformationGeometryChanged.emit()
+        self.figuresChanged.emit()
         if self._cursor is not None:
             self.cursorChanged.emit()
 
@@ -423,3 +432,38 @@ class Viewport2DViewModel(QObject):
         corners = (view.to_world(0.0, 0.0), view.to_world(self._width, self._height),
                    view.to_world(0.0, self._height), view.to_world(self._width, 0.0))
         return max(math.hypot(x, y) for x, y in corners)
+
+    @Property("QVariantMap", notify=figuresChanged)
+    def figureShapes(self) -> dict:
+        """Matrices drawn as objects, in screen coordinates.
+
+        ``arrows`` carry the column index (colour) and role ("result" solid,
+        "operand" faint); ``polygons`` are the parallelograms the columns span.
+        3×3 figures are left to the 3D view (``needs3D``).
+        """
+        scene = self._figure_source()
+        empty = {"visible": False, "needs3D": False, "arrows": [], "polygons": [], "labels": []}
+        if scene is None:
+            return empty
+        if scene.size == 3:
+            return {**empty, "needs3D": True}
+        view = self._viewport()
+
+        def screen(point):
+            return view.to_screen(point[0], point[1])
+
+        arrows = []
+        for arrow in scene.arrows:
+            (x1, y1), (x2, y2) = screen(arrow.start), screen(arrow.end)
+            arrows.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "column": arrow.column, "role": arrow.role,
+                           "isZero": math.hypot(x2 - x1, y2 - y1) < 0.5})
+        polygons = [
+            {"points": [c for point in figure.polygon() for c in screen(point)], "role": figure.role}
+            for figure in scene.figures
+        ]
+        labels = []
+        for figure in scene.figures:
+            if figure.label:
+                x, y = screen(figure.corner)
+                labels.append({"x": x, "y": y, "text": figure.label, "role": figure.role})
+        return {"visible": True, "needs3D": False, "arrows": arrows, "polygons": polygons, "labels": labels}
